@@ -36,6 +36,10 @@ def scrape_hape_product(search_text: str):
         description_el = page.locator("div.product-detail__description")
         description = description_el.inner_text().strip() if description_el.count() > 0 else ""
         
+        # Extract SKU from product meta
+        sku_el = page.locator("span.product__sku")
+        sku = sku_el.inner_text().strip() if sku_el.count() > 0 else ""
+        
         # Extract images from media-gallery (main product images)
         image_elements = page.locator("media-gallery .media-gallery__image img").all()
         images = []
@@ -64,7 +68,7 @@ def scrape_hape_product(search_text: str):
             "price": price,
             "description": description,
             "images": images,
-            "sku": "",       # or scrape it from page if available
+            "sku": sku,
             "vendor": "",    # same
             "variants": []   # same
         }
