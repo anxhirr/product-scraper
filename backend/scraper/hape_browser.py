@@ -51,7 +51,9 @@ def scrape_hape_product(search_text: str):
                         # Use XPath to find ul that follows h2 containing "Features"
                         features_ul = content_el.locator("xpath=.//h2[contains(text(), 'Features')]/following-sibling::ul[1]")
                         if features_ul.count() > 0:
-                            specifications = features_ul.inner_text().strip()
+                            specs_text = features_ul.inner_text().strip()
+                            # Replace newlines with spaces and clean up multiple spaces
+                            specifications = ' '.join(specs_text.split())
                     except:
                         pass
                     
@@ -64,9 +66,10 @@ def scrape_hape_product(search_text: str):
                             if any(keyword in line for keyword in ['Item Weight:', 'Product Dimensions:', 'Adult Assembly Required:', 'Warning:']):
                                 spec_lines.append(line)
                         if spec_lines:
-                            specifications = '\n'.join(spec_lines)
+                            specifications = ' '.join(spec_lines)
                     
-                    description = full_text
+                    # Replace newlines with spaces and clean up multiple spaces
+                    description = ' '.join(full_text.split())
                 break
         
         # Extract SKU from product meta
