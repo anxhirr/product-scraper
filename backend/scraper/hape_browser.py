@@ -34,7 +34,8 @@ def scrape_hape_product(search_text: str) -> Product:
         print(f"[Step 7/8] Extracting product data...")
         # Extract data
         title = page.locator("h1.product-detail__title").inner_text().strip()
-        price = page.locator("span.price.price-same-style.heading-style").inner_text().strip()
+        # Get price - use first if multiple prices exist (e.g., sale price and regular price)
+        price = page.locator("span.price.price-same-style.heading-style").first.inner_text().strip()
         
         # Extract description from collapsible-block with "Description" heading
         description = ""
