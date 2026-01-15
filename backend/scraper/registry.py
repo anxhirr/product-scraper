@@ -1,12 +1,14 @@
 from scraper.base_scraper import BaseScraper
 from scraper.hape_scraper import HapeScraper
 from scraper.elrincondelosgenios_scraper import ElRinconDeLosGeniosScraper
+from scraper.elrincondelosgenios_api_scraper import ElRinconDeLosGeniosApiScraper
 
 
 # Registry mapping site identifiers to scraper classes
 SCRAPER_REGISTRY = {
     "hape": HapeScraper,
     "elrincondelosgenios": ElRinconDeLosGeniosScraper,
+    "elrincondelosgenios_api": ElRinconDeLosGeniosApiScraper,
 }
 
 
