@@ -35,7 +35,24 @@ def scrape_hape_product(search_text: str):
         price = page.locator("span.price.price-same-style.heading-style").inner_text().strip()
         description_el = page.locator("div.product-detail__description")
         description = description_el.inner_text().strip() if description_el.count() > 0 else ""
-        images = [img.get_attribute("src") for img in page.locator("div.product-detail__gallery img").all()]
+        
+        # Extract images from media-gallery (main product images)
+        image_elements = page.locator("media-gallery .media-gallery__image img").all()
+        images = []
+        seen_urls = set()  # To avoid duplicates
+        
+        for img in image_elements:
+            src = img.get_attribute("src")
+            if src:
+                # Convert protocol-relative URLs (//) to https://
+                if src.startswith("//"):
+                    src = "https:" + src
+                # Remove query parameters to get clean image URL
+                clean_url = src.split("?")[0] if "?" in src else src
+                # Only add if we haven't seen this URL before
+                if clean_url not in seen_urls:
+                    seen_urls.add(clean_url)
+                    images.append(clean_url)
 
         print(f"[Step 8/8] Closing browser...")
         browser.close()
