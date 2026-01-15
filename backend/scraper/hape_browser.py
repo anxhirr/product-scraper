@@ -1,6 +1,7 @@
 from playwright.sync_api import sync_playwright
+from scraper.models import Product
 
-def scrape_hape_product(search_text: str):
+def scrape_hape_product(search_text: str) -> Product:
     print(f"[Step 1/8] Launching browser...")
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -22,7 +23,8 @@ def scrape_hape_product(search_text: str):
         href = first_product.get_attribute("href")
         
         print(f"[Step 5/8] Navigating to product page...")
-        page.goto(f"https://toys.hape.com{href}")
+        product_url = f"https://toys.hape.com{href}"
+        page.goto(product_url)
 
         print(f"[Step 6/8] Waiting for product details to load...")
         # Wait for product title
@@ -99,11 +101,12 @@ def scrape_hape_product(search_text: str):
         
         print(f"✓ Scraping completed successfully!")
 
-        return {
-            "title": title,
-            "price": price,
-            "description": description,
-            "specifications": specifications,
-            "images": images,
-            "sku": sku
-        }
+        return Product(
+            title=title,
+            price=price,
+            description=description,
+            specifications=specifications,
+            images=images,
+            sku=sku,
+            url=product_url
+        )
