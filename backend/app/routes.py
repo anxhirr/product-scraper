@@ -9,9 +9,9 @@ class ProductResponse(BaseModel):
     title: str
     sku: str
     price: str
-    vendor: str
+    description: str
+    specifications: str
     images: List[str]
-    variants: List[str]
 
 @router.get("/search/{query}", response_model=ProductResponse)
 def search(query: str):

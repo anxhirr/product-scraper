@@ -33,8 +33,41 @@ def scrape_hape_product(search_text: str):
         # Extract data
         title = page.locator("h1.product-detail__title").inner_text().strip()
         price = page.locator("span.price.price-same-style.heading-style").inner_text().strip()
-        description_el = page.locator("div.product-detail__description")
-        description = description_el.inner_text().strip() if description_el.count() > 0 else ""
+        
+        # Extract description from collapsible-block with "Description" heading
+        description = ""
+        specifications = ""
+        description_blocks = page.locator("collapsible-block").all()
+        for block in description_blocks:
+            heading = block.locator("h3.collapsible-heading").inner_text().strip()
+            if "Description" in heading:
+                content_el = block.locator("div.collapsible-content_inner.product_description")
+                if content_el.count() > 0:
+                    full_text = content_el.inner_text().strip()
+                    
+                    # Extract Features section as specifications
+                    # Try to find ul list that comes after Features heading
+                    try:
+                        # Use XPath to find ul that follows h2 containing "Features"
+                        features_ul = content_el.locator("xpath=.//h2[contains(text(), 'Features')]/following-sibling::ul[1]")
+                        if features_ul.count() > 0:
+                            specifications = features_ul.inner_text().strip()
+                    except:
+                        pass
+                    
+                    # If Features not found, try to extract specification data from text
+                    if not specifications:
+                        spec_lines = []
+                        lines = full_text.split('\n')
+                        for line in lines:
+                            line = line.strip()
+                            if any(keyword in line for keyword in ['Item Weight:', 'Product Dimensions:', 'Adult Assembly Required:', 'Warning:']):
+                                spec_lines.append(line)
+                        if spec_lines:
+                            specifications = '\n'.join(spec_lines)
+                    
+                    description = full_text
+                break
         
         # Extract SKU from product meta
         sku_el = page.locator("span.product__sku")
@@ -67,8 +100,7 @@ def scrape_hape_product(search_text: str):
             "title": title,
             "price": price,
             "description": description,
+            "specifications": specifications,
             "images": images,
-            "sku": sku,
-            "vendor": "",    # same
-            "variants": []   # same
+            "sku": sku
         }
