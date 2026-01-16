@@ -2,33 +2,93 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { SearchIcon } from "lucide-react"
 import ProductResults from "@/components/product-results"
 
 export interface ProductData {
   name: string
   code: string
-  brand: string
+  price?: string
+  brand?: string
   description?: string
   specifications?: Record<string, string>
   images?: string[]
   sourceUrl?: string
 }
 
+const STORAGE_KEY = "product-scraper-selected-site"
+
 export default function ProductScraperForm() {
   const [formData, setFormData] = useState({
     name: "",
     code: "",
-    brand: "",
+    site: "",
   })
+  const [sites, setSites] = useState<string[]>([])
+  const [loadingSites, setLoadingSites] = useState(true)
   const [loading, setLoading] = useState(false)
   const [results, setResults] = useState<ProductData | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [isMounted, setIsMounted] = useState(false)
+
+  // Mark component as mounted (client-side only)
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
+  // Save site to localStorage whenever it changes (but not on initial mount)
+  useEffect(() => {
+    if (isMounted && formData.site && sites.length > 0) {
+      // Only save if the site is actually in the available sites list
+      if (sites.includes(formData.site)) {
+        localStorage.setItem(STORAGE_KEY, formData.site)
+      }
+    }
+  }, [formData.site, sites, isMounted])
+
+  // Fetch available sites on component mount
+  useEffect(() => {
+    const fetchSites = async () => {
+      try {
+        const response = await fetch("/api/scrape/sites")
+        if (!response.ok) {
+          throw new Error("Failed to fetch available sites")
+        }
+        const sitesData = await response.json()
+        setSites(sitesData)
+        
+        // Restore saved site if it's still valid, otherwise use first site
+        if (sitesData.length > 0) {
+          const savedSite = isMounted ? localStorage.getItem(STORAGE_KEY) : null
+          const siteToUse = savedSite && sitesData.includes(savedSite) 
+            ? savedSite 
+            : sitesData[0]
+          
+          // Always set the site after fetching (this ensures it's set even if initial state was empty)
+          setFormData((prev) => ({ ...prev, site: siteToUse }))
+        }
+      } catch (err) {
+        console.error("Error fetching sites:", err)
+        setError("Failed to load available sites")
+      } finally {
+        setLoadingSites(false)
+      }
+    }
+
+    fetchSites()
+  }, [isMounted])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -69,14 +129,24 @@ export default function ProductScraperForm() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="brand">Brand Name</Label>
-                <Input
-                  id="brand"
-                  placeholder="e.g., Apple, Samsung, Sony"
-                  value={formData.brand}
-                  onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                <Label htmlFor="site">Website</Label>
+                <Select
+                  value={formData.site}
+                  onValueChange={(value) => setFormData({ ...formData, site: value })}
+                  disabled={loadingSites}
                   required
-                />
+                >
+                  <SelectTrigger id="site" className="w-full">
+                    <SelectValue placeholder={loadingSites ? "Loading sites..." : "Select a website"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sites.map((site) => (
+                      <SelectItem key={site} value={site}>
+                        {site}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="code">Product Code</Label>
