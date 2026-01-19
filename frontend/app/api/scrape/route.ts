@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { translateToAlbanian } from "@/lib/translator"
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"
 
@@ -24,7 +25,9 @@ interface ProductData {
   price?: string
   brand?: string
   description?: string
+  descriptionOriginal?: string
   specifications?: Record<string, string>
+  specificationsOriginal?: Record<string, string>
   images?: string[]
   sourceUrl?: string
 }
@@ -60,16 +63,46 @@ function parseSpecifications(specs: string): Record<string, string> {
 }
 
 // Map backend Product to frontend ProductData
-function mapProductToProductData(
+async function mapProductToProductData(
   backendProduct: BackendProduct,
   code: string
-): ProductData {
+): Promise<ProductData> {
+  // Parse specifications first
+  const parsedSpecs = parseSpecifications(backendProduct.specifications)
+
+  // Translate description and specification values in parallel
+  const translateDescription = backendProduct.description
+    ? translateToAlbanian(backendProduct.description)
+    : Promise.resolve(undefined)
+
+  // Translate specification values in parallel (keep keys as-is)
+  const translatedSpecs: Record<string, string> = {}
+  let translateSpecs: Promise<void> = Promise.resolve()
+  
+  if (parsedSpecs && Object.keys(parsedSpecs).length > 0) {
+    const specEntries = Object.entries(parsedSpecs)
+    const translationPromises = specEntries.map(async ([key, value]) => {
+      const translatedValue = value ? await translateToAlbanian(value) : value
+      return [key, translatedValue] as [string, string]
+    })
+    translateSpecs = Promise.all(translationPromises).then((translatedEntries) => {
+      translatedEntries.forEach(([key, value]) => {
+        translatedSpecs[key] = value
+      })
+    })
+  }
+
+  // Wait for both description and specifications translations to complete
+  const [translatedDescription] = await Promise.all([translateDescription, translateSpecs])
+
   return {
     name: backendProduct.title,
     code: backendProduct.sku || code, // Fallback to provided code if sku is empty
     price: backendProduct.price,
-    description: backendProduct.description,
-    specifications: parseSpecifications(backendProduct.specifications),
+    description: translatedDescription,
+    descriptionOriginal: backendProduct.description || undefined,
+    specifications: Object.keys(translatedSpecs).length > 0 ? translatedSpecs : undefined,
+    specificationsOriginal: Object.keys(parsedSpecs).length > 0 ? parsedSpecs : undefined,
     images: backendProduct.images || [],
     sourceUrl: backendProduct.url,
   }
@@ -110,8 +143,8 @@ export async function POST(request: NextRequest) {
 
     const backendProduct: BackendProduct = await response.json()
 
-    // Map backend Product to frontend ProductData
-    const productData = mapProductToProductData(backendProduct, code)
+    // Map backend Product to frontend ProductData and translate to Albanian
+    const productData = await mapProductToProductData(backendProduct, code)
 
     return NextResponse.json(productData)
   } catch (error) {

@@ -3,6 +3,8 @@
 import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { ExternalLinkIcon, ImageIcon, FileTextIcon, ListIcon, DollarSignIcon, CopyIcon, CheckIcon, DownloadIcon } from "lucide-react"
 import type { ProductData } from "./product-scraper-form"
@@ -15,6 +17,15 @@ export default function ProductResults({ data }: ProductResultsProps) {
   const { toast } = useToast()
   const [copiedDescription, setCopiedDescription] = useState(false)
   const [copiedSpecifications, setCopiedSpecifications] = useState(false)
+  const [showAlbanian, setShowAlbanian] = useState(true) // Default to Albanian/translated
+
+  // Get the current description (translated or original)
+  const currentDescription = showAlbanian ? (data.description || data.descriptionOriginal) : (data.descriptionOriginal || data.description)
+
+  // Get the current specifications (translated or original)
+  const currentSpecifications = showAlbanian 
+    ? (data.specifications || data.specificationsOriginal)
+    : (data.specificationsOriginal || data.specifications)
 
   const copyToClipboard = async (text: string, type: "description" | "specifications") => {
     try {
@@ -35,6 +46,18 @@ export default function ProductResults({ data }: ProductResultsProps) {
         title: "Failed to copy",
         description: "Could not copy to clipboard",
       })
+    }
+  }
+
+  const copyDescription = () => {
+    if (currentDescription) {
+      copyToClipboard(currentDescription, "description")
+    }
+  }
+
+  const copySpecifications = () => {
+    if (currentSpecifications) {
+      copyToClipboard(formatSpecifications(currentSpecifications), "specifications")
     }
   }
 
@@ -148,6 +171,12 @@ export default function ProductResults({ data }: ProductResultsProps) {
     const extension = imageUrl.split(".").pop()?.split("?")[0] || "jpg"
     return `${data.name.replace(/[^a-z0-9]/gi, "_")}_${index + 1}.${extension}`
   }
+  // Check if we have both original and translated versions
+  const hasBothVersions = (data.description && data.descriptionOriginal) || 
+                          (data.specifications && data.specificationsOriginal && 
+                           Object.keys(data.specifications).length > 0 && 
+                           Object.keys(data.specificationsOriginal).length > 0)
+
   return (
     <div className="space-y-6 animate-in fade-in-50 duration-500">
       <Card>
@@ -162,6 +191,21 @@ export default function ProductResults({ data }: ProductResultsProps) {
                 <div className="mt-3 flex items-center gap-2">
                   <DollarSignIcon className="w-5 h-5 text-primary" />
                   <span className="text-2xl font-bold text-primary">{data.price}</span>
+                </div>
+              )}
+              {hasBothVersions && (
+                <div className="mt-4 flex items-center gap-3">
+                  <Label htmlFor="language-toggle" className="text-sm text-muted-foreground cursor-pointer">
+                    Original
+                  </Label>
+                  <Switch
+                    id="language-toggle"
+                    checked={showAlbanian}
+                    onCheckedChange={setShowAlbanian}
+                  />
+                  <Label htmlFor="language-toggle" className="text-sm text-muted-foreground cursor-pointer">
+                    Shqip (Albanian)
+                  </Label>
                 </div>
               )}
             </div>
@@ -180,7 +224,7 @@ export default function ProductResults({ data }: ProductResultsProps) {
         </CardHeader>
       </Card>
 
-      {data.description && (
+      {currentDescription && (
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -191,7 +235,7 @@ export default function ProductResults({ data }: ProductResultsProps) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => copyToClipboard(data.description!, "description")}
+                onClick={copyDescription}
                 className="gap-2"
               >
                 {copiedDescription ? (
@@ -209,12 +253,12 @@ export default function ProductResults({ data }: ProductResultsProps) {
             </div>
           </CardHeader>
           <CardContent>
-            <p className="text-foreground leading-relaxed">{data.description}</p>
+            <p className="text-foreground leading-relaxed">{currentDescription}</p>
           </CardContent>
         </Card>
       )}
 
-      {data.specifications && Object.keys(data.specifications).length > 0 && (
+      {currentSpecifications && Object.keys(currentSpecifications).length > 0 && (
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -225,7 +269,7 @@ export default function ProductResults({ data }: ProductResultsProps) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => copyToClipboard(formatSpecifications(data.specifications!), "specifications")}
+                onClick={copySpecifications}
                 className="gap-2"
               >
                 {copiedSpecifications ? (
@@ -244,7 +288,7 @@ export default function ProductResults({ data }: ProductResultsProps) {
           </CardHeader>
           <CardContent>
             <dl className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {Object.entries(data.specifications).map(([key, value]) => (
+              {Object.entries(currentSpecifications).map(([key, value]) => (
                 <div key={key} className="space-y-1">
                   <dt className="text-sm font-medium text-muted-foreground">{key}</dt>
                   <dd className="text-sm text-foreground">{value}</dd>

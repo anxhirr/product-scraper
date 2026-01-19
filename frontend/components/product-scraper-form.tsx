@@ -23,7 +23,9 @@ export interface ProductData {
   price?: string
   brand?: string
   description?: string
+  descriptionOriginal?: string
   specifications?: Record<string, string>
+  specificationsOriginal?: Record<string, string>
   images?: string[]
   sourceUrl?: string
 }
