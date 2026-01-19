@@ -19,6 +19,7 @@ import ProductResults from "@/components/product-results"
 
 export interface ProductData {
   name: string
+  nameOriginal?: string
   code: string
   price?: string
   brand?: string

@@ -19,6 +19,9 @@ export default function ProductResults({ data }: ProductResultsProps) {
   const [copiedSpecifications, setCopiedSpecifications] = useState(false)
   const [showAlbanian, setShowAlbanian] = useState(true) // Default to Albanian/translated
 
+  // Get the current name (translated or original)
+  const currentName = showAlbanian ? (data.name || data.nameOriginal) : (data.nameOriginal || data.name)
+
   // Get the current description (translated or original)
   const currentDescription = showAlbanian ? (data.description || data.descriptionOriginal) : (data.descriptionOriginal || data.description)
 
@@ -146,7 +149,7 @@ export default function ProductResults({ data }: ProductResultsProps) {
       for (let i = 0; i < data.images.length; i++) {
         const imageUrl = data.images[i]
         const extension = imageUrl.split(".").pop()?.split("?")[0] || "jpg"
-        const filename = `${data.name.replace(/[^a-z0-9]/gi, "_")}_${i + 1}.${extension}`
+        const filename = `${(data.nameOriginal || data.name).replace(/[^a-z0-9]/gi, "_")}_${i + 1}.${extension}`
         
         // Add a small delay between downloads to avoid overwhelming the browser
         if (i > 0) {
@@ -169,10 +172,11 @@ export default function ProductResults({ data }: ProductResultsProps) {
 
   const getImageFilename = (imageUrl: string, index: number): string => {
     const extension = imageUrl.split(".").pop()?.split("?")[0] || "jpg"
-    return `${data.name.replace(/[^a-z0-9]/gi, "_")}_${index + 1}.${extension}`
+    return `${(data.nameOriginal || data.name).replace(/[^a-z0-9]/gi, "_")}_${index + 1}.${extension}`
   }
   // Check if we have both original and translated versions
-  const hasBothVersions = (data.description && data.descriptionOriginal) || 
+  const hasBothVersions = (data.name && data.nameOriginal) ||
+                          (data.description && data.descriptionOriginal) || 
                           (data.specifications && data.specificationsOriginal && 
                            Object.keys(data.specifications).length > 0 && 
                            Object.keys(data.specificationsOriginal).length > 0)
@@ -183,7 +187,7 @@ export default function ProductResults({ data }: ProductResultsProps) {
         <CardHeader>
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <CardTitle className="text-2xl">{data.name}</CardTitle>
+              <CardTitle className="text-2xl">{currentName}</CardTitle>
               <CardDescription className="mt-2">
                 {data.brand ? `${data.brand} · ` : ""}{data.code}
               </CardDescription>
@@ -324,7 +328,7 @@ export default function ProductResults({ data }: ProductResultsProps) {
                 <div key={index} className="relative group aspect-square rounded-lg overflow-hidden border bg-muted">
                   <img
                     src={image || "/placeholder.svg"}
-                    alt={`${data.name} - Image ${index + 1}`}
+                    alt={`${currentName} - Image ${index + 1}`}
                     className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
                   />
                   <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">

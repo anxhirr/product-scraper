@@ -21,6 +21,7 @@ interface BackendProduct {
 
 interface ProductData {
   name: string
+  nameOriginal?: string
   code: string
   price?: string
   brand?: string
@@ -70,7 +71,11 @@ async function mapProductToProductData(
   // Parse specifications first
   const parsedSpecs = parseSpecifications(backendProduct.specifications)
 
-  // Translate description and specification values in parallel
+  // Translate name, description and specification values in parallel
+  const translateName = backendProduct.title
+    ? translateToAlbanian(backendProduct.title)
+    : Promise.resolve(undefined)
+
   const translateDescription = backendProduct.description
     ? translateToAlbanian(backendProduct.description)
     : Promise.resolve(undefined)
@@ -92,11 +97,12 @@ async function mapProductToProductData(
     })
   }
 
-  // Wait for both description and specifications translations to complete
-  const [translatedDescription] = await Promise.all([translateDescription, translateSpecs])
+  // Wait for name, description and specifications translations to complete
+  const [translatedName, translatedDescription] = await Promise.all([translateName, translateDescription, translateSpecs])
 
   return {
-    name: backendProduct.title,
+    name: translatedName || backendProduct.title,
+    nameOriginal: backendProduct.title || undefined,
     code: backendProduct.sku || code, // Fallback to provided code if sku is empty
     price: backendProduct.price,
     description: translatedDescription,
