@@ -15,6 +15,7 @@ interface ProductResultsProps {
 
 export default function ProductResults({ data }: ProductResultsProps) {
   const { toast } = useToast()
+  const [copiedName, setCopiedName] = useState(false)
   const [copiedDescription, setCopiedDescription] = useState(false)
   const [copiedSpecifications, setCopiedSpecifications] = useState(false)
   const [showAlbanian, setShowAlbanian] = useState(true) // Default to Albanian/translated
@@ -30,10 +31,13 @@ export default function ProductResults({ data }: ProductResultsProps) {
     ? (data.specifications || data.specificationsOriginal)
     : (data.specificationsOriginal || data.specifications)
 
-  const copyToClipboard = async (text: string, type: "description" | "specifications") => {
+  const copyToClipboard = async (text: string, type: "name" | "description" | "specifications") => {
     try {
       await navigator.clipboard.writeText(text)
-      if (type === "description") {
+      if (type === "name") {
+        setCopiedName(true)
+        setTimeout(() => setCopiedName(false), 2000)
+      } else if (type === "description") {
         setCopiedDescription(true)
         setTimeout(() => setCopiedDescription(false), 2000)
       } else {
@@ -42,13 +46,19 @@ export default function ProductResults({ data }: ProductResultsProps) {
       }
       toast({
         title: "Copied!",
-        description: `${type === "description" ? "Description" : "Specifications"} copied to clipboard`,
+        description: `${type === "name" ? "Name" : type === "description" ? "Description" : "Specifications"} copied to clipboard`,
       })
     } catch (err) {
       toast({
         title: "Failed to copy",
         description: "Could not copy to clipboard",
       })
+    }
+  }
+
+  const copyName = () => {
+    if (currentName) {
+      copyToClipboard(currentName, "name")
     }
   }
 
@@ -183,49 +193,78 @@ export default function ProductResults({ data }: ProductResultsProps) {
 
   return (
     <div className="space-y-6 animate-in fade-in-50 duration-500">
+      {hasBothVersions && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-center gap-3">
+              <Label htmlFor="language-toggle" className="text-sm text-muted-foreground cursor-pointer">
+                Original
+              </Label>
+              <Switch
+                id="language-toggle"
+                checked={showAlbanian}
+                onCheckedChange={setShowAlbanian}
+              />
+              <Label htmlFor="language-toggle" className="text-sm text-muted-foreground cursor-pointer">
+                Shqip (Albanian)
+              </Label>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <CardTitle className="text-2xl">{currentName}</CardTitle>
-              <CardDescription className="mt-2">
-                {data.brand ? `${data.brand} · ` : ""}{data.code}
-              </CardDescription>
-              {data.price && (
-                <div className="mt-3 flex items-center gap-2">
-                  <DollarSignIcon className="w-5 h-5 text-primary" />
-                  <span className="text-2xl font-bold text-primary">{data.price}</span>
-                </div>
+          <div className="flex items-center justify-between mb-2">
+            <CardTitle className="text-2xl">{currentName}</CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={copyName}
+              className="gap-2"
+            >
+              {copiedName ? (
+                <>
+                  <CheckIcon className="w-4 h-4" />
+                  Copied
+                </>
+              ) : (
+                <>
+                  <CopyIcon className="w-4 h-4" />
+                  Copy
+                </>
               )}
-              {hasBothVersions && (
-                <div className="mt-4 flex items-center gap-3">
-                  <Label htmlFor="language-toggle" className="text-sm text-muted-foreground cursor-pointer">
-                    Original
-                  </Label>
-                  <Switch
-                    id="language-toggle"
-                    checked={showAlbanian}
-                    onCheckedChange={setShowAlbanian}
-                  />
-                  <Label htmlFor="language-toggle" className="text-sm text-muted-foreground cursor-pointer">
-                    Shqip (Albanian)
-                  </Label>
-                </div>
-              )}
+            </Button>
+          </div>
+          <CardDescription className="mt-2">
+            {data.brand ? `${data.brand} · ` : ""}{data.code}
+          </CardDescription>
+          {data.price && (
+            <div className="mt-3 flex items-center gap-2">
+              <DollarSignIcon className="w-5 h-5 text-primary" />
+              <span className="text-2xl font-bold text-primary">{data.price}</span>
             </div>
-            {data.sourceUrl && (
+          )}
+        </CardHeader>
+        {data.sourceUrl && (
+          <CardContent>
+            <Button
+              variant="outline"
+              size="sm"
+              asChild
+              className="gap-2"
+            >
               <a
                 href={data.sourceUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 ml-4"
               >
                 View Source
                 <ExternalLinkIcon className="w-4 h-4" />
               </a>
-            )}
-          </div>
-        </CardHeader>
+            </Button>
+          </CardContent>
+        )}
       </Card>
 
       {currentDescription && (
@@ -292,12 +331,14 @@ export default function ProductResults({ data }: ProductResultsProps) {
           </CardHeader>
           <CardContent>
             <dl className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {Object.entries(currentSpecifications).map(([key, value]) => (
-                <div key={key} className="space-y-1">
-                  <dt className="text-sm font-medium text-muted-foreground">{key}</dt>
-                  <dd className="text-sm text-foreground">{value}</dd>
-                </div>
-              ))}
+              {Object.entries(currentSpecifications)
+                .filter(([key]) => key.toLowerCase() !== "specifications")
+                .map(([key, value]) => (
+                  <div key={key} className="space-y-1">
+                    <dt className="text-sm font-medium text-muted-foreground">{key}</dt>
+                    <dd className="text-sm text-foreground">{value}</dd>
+                  </div>
+                ))}
             </dl>
           </CardContent>
         </Card>

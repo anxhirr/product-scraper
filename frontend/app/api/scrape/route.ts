@@ -4,8 +4,8 @@ import { translateToAlbanian } from "@/lib/translator"
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"
 
 interface ScrapeRequest {
-  name: string
-  code: string
+  name?: string
+  code?: string
   site: string
 }
 
@@ -119,16 +119,24 @@ export async function POST(request: NextRequest) {
     const body: ScrapeRequest = await request.json()
     const { name, code, site } = body
 
-    if (!name || !code || !site) {
+    if (!site) {
       return NextResponse.json(
-        { error: "Missing required fields: name, code, and site are required" },
+        { error: "Missing required field: site is required" },
+        { status: 400 }
+      )
+    }
+
+    // At least one of name or code must be provided
+    if (!name && !code) {
+      return NextResponse.json(
+        { error: "Missing required field: either name or code must be provided" },
         { status: 400 }
       )
     }
 
     // Call backend API: /search/{site}/{query}
-    // Using product name as query (per plan specification)
-    const query = encodeURIComponent(name)
+    // Use code if provided, otherwise use name (code has priority)
+    const query = encodeURIComponent(code || name || "")
     const backendUrl = `${BACKEND_URL}/search/${encodeURIComponent(site)}/${query}`
 
     const response = await fetch(backendUrl, {
@@ -150,7 +158,8 @@ export async function POST(request: NextRequest) {
     const backendProduct: BackendProduct = await response.json()
 
     // Map backend Product to frontend ProductData and translate to Albanian
-    const productData = await mapProductToProductData(backendProduct, code)
+    // Use provided code if available, otherwise use empty string (will fallback to sku from backend)
+    const productData = await mapProductToProductData(backendProduct, code || "")
 
     return NextResponse.json(productData)
   } catch (error) {

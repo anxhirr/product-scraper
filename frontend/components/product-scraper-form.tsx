@@ -95,6 +95,13 @@ export default function ProductScraperForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Validate that at least one of name or code is provided
+    if (!formData.name && !formData.code) {
+      setError("Please provide either a product name or product code")
+      return
+    }
+
     setLoading(true)
     setError(null)
     setResults(null)
@@ -126,7 +133,7 @@ export default function ProductScraperForm() {
       <Card>
         <CardHeader>
           <CardTitle>Product Details</CardTitle>
-          <CardDescription>Enter the product information to search for details on the brand website</CardDescription>
+          <CardDescription>Enter either the product name or product code to search for details on the brand website</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -158,7 +165,6 @@ export default function ProductScraperForm() {
                   placeholder="e.g., SKU-12345"
                   value={formData.code}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                  required
                 />
               </div>
               <div className="space-y-2">
@@ -168,7 +174,6 @@ export default function ProductScraperForm() {
                   placeholder="e.g., iPhone 15 Pro"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  required
                 />
               </div>
             </div>
