@@ -6,7 +6,7 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:800
 interface ScrapeRequest {
   name?: string
   code?: string
-  site: string
+  brand: string
 }
 
 interface BackendProduct {
@@ -117,11 +117,11 @@ async function mapProductToProductData(
 export async function POST(request: NextRequest) {
   try {
     const body: ScrapeRequest = await request.json()
-    const { name, code, site } = body
+    const { name, code, brand } = body
 
-    if (!site) {
+    if (!brand) {
       return NextResponse.json(
-        { error: "Missing required field: site is required" },
+        { error: "Missing required field: brand is required" },
         { status: 400 }
       )
     }
@@ -134,16 +134,27 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Call backend API: /search/{site}/{query}
+    // Call backend API: /search/batch (using single product in batch format)
     // Use code if provided, otherwise use name (code has priority)
-    const query = encodeURIComponent(code || name || "")
-    const backendUrl = `${BACKEND_URL}/search/${encodeURIComponent(site)}/${query}`
+    const query = code || name || ""
+    const backendUrl = `${BACKEND_URL}/search/batch`
 
     const response = await fetch(backendUrl, {
-      method: "GET",
+      method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
+      body: JSON.stringify({
+        products: [
+          {
+            name: name,
+            code: code,
+            brand: brand,
+          },
+        ],
+        batch_size: 1,
+        batch_delay: 0,
+      }),
     })
 
     if (!response.ok) {
@@ -155,7 +166,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const backendProduct: BackendProduct = await response.json()
+    const backendResults: Array<{
+      product?: BackendProduct
+      error?: string
+      status: "success" | "error"
+    }> = await response.json()
+
+    if (backendResults.length === 0 || backendResults[0].status !== "success" || !backendResults[0].product) {
+      const errorMsg = backendResults[0]?.error || "Failed to scrape product"
+      return NextResponse.json(
+        { error: errorMsg },
+        { status: 500 }
+      )
+    }
+
+    const backendProduct = backendResults[0].product
 
     // Map backend Product to frontend ProductData and translate to Albanian
     // Use provided code if available, otherwise use empty string (will fallback to sku from backend)

@@ -31,16 +31,16 @@ export interface ProductData {
   sourceUrl?: string
 }
 
-const STORAGE_KEY = "product-scraper-selected-site"
+const STORAGE_KEY = "product-scraper-selected-brand"
 
 export default function ProductScraperForm() {
   const [formData, setFormData] = useState({
     name: "",
     code: "",
-    site: "",
+    brand: "",
   })
-  const [sites, setSites] = useState<string[]>([])
-  const [loadingSites, setLoadingSites] = useState(true)
+  const [brands, setBrands] = useState<string[]>([])
+  const [loadingBrands, setLoadingBrands] = useState(true)
   const [loading, setLoading] = useState(false)
   const [results, setResults] = useState<ProductData | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -51,46 +51,46 @@ export default function ProductScraperForm() {
     setIsMounted(true)
   }, [])
 
-  // Save site to localStorage whenever it changes (but not on initial mount)
+  // Save brand to localStorage whenever it changes (but not on initial mount)
   useEffect(() => {
-    if (isMounted && formData.site && sites.length > 0) {
-      // Only save if the site is actually in the available sites list
-      if (sites.includes(formData.site)) {
-        localStorage.setItem(STORAGE_KEY, formData.site)
+    if (isMounted && formData.brand && brands.length > 0) {
+      // Only save if the brand is actually in the available brands list
+      if (brands.includes(formData.brand)) {
+        localStorage.setItem(STORAGE_KEY, formData.brand)
       }
     }
-  }, [formData.site, sites, isMounted])
+  }, [formData.brand, brands, isMounted])
 
-  // Fetch available sites on component mount
+  // Fetch available brands on component mount
   useEffect(() => {
-    const fetchSites = async () => {
+    const fetchBrands = async () => {
       try {
         const response = await fetch("/api/scrape/sites")
         if (!response.ok) {
-          throw new Error("Failed to fetch available sites")
+          throw new Error("Failed to fetch available brands")
         }
-        const sitesData = await response.json()
-        setSites(sitesData)
+        const brandsData = await response.json()
+        setBrands(brandsData)
         
-        // Restore saved site if it's still valid, otherwise use first site
-        if (sitesData.length > 0) {
-          const savedSite = isMounted ? localStorage.getItem(STORAGE_KEY) : null
-          const siteToUse = savedSite && sitesData.includes(savedSite) 
-            ? savedSite 
-            : sitesData[0]
+        // Restore saved brand if it's still valid, otherwise use first brand
+        if (brandsData.length > 0) {
+          const savedBrand = isMounted ? localStorage.getItem(STORAGE_KEY) : null
+          const brandToUse = savedBrand && brandsData.includes(savedBrand) 
+            ? savedBrand 
+            : brandsData[0]
           
-          // Always set the site after fetching (this ensures it's set even if initial state was empty)
-          setFormData((prev) => ({ ...prev, site: siteToUse }))
+          // Always set the brand after fetching (this ensures it's set even if initial state was empty)
+          setFormData((prev) => ({ ...prev, brand: brandToUse }))
         }
       } catch (err) {
-        console.error("Error fetching sites:", err)
-        setError("Failed to load available sites")
+        console.error("Error fetching brands:", err)
+        setError("Failed to load available brands")
       } finally {
-        setLoadingSites(false)
+        setLoadingBrands(false)
       }
     }
 
-    fetchSites()
+    fetchBrands()
   }, [isMounted])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -139,20 +139,20 @@ export default function ProductScraperForm() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="site">Website</Label>
+                <Label htmlFor="brand">Brand</Label>
                 <Select
-                  value={formData.site}
-                  onValueChange={(value) => setFormData({ ...formData, site: value })}
-                  disabled={loadingSites}
+                  value={formData.brand}
+                  onValueChange={(value) => setFormData({ ...formData, brand: value })}
+                  disabled={loadingBrands}
                   required
                 >
-                  <SelectTrigger id="site" className="w-full">
-                    <SelectValue placeholder={loadingSites ? "Loading sites..." : "Select a website"} />
+                  <SelectTrigger id="brand" className="w-full">
+                    <SelectValue placeholder={loadingBrands ? "Loading brands..." : "Select a brand"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {sites.map((site) => (
-                      <SelectItem key={site} value={site}>
-                        {site}
+                    {brands.map((brand) => (
+                      <SelectItem key={brand} value={brand}>
+                        {brand}
                       </SelectItem>
                     ))}
                   </SelectContent>

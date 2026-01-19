@@ -28,7 +28,6 @@ import {
   DownloadIcon,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import * as XLSX from "xlsx"
 import type { ProductData } from "./product-scraper-form"
 import ProductResults from "./product-results"
 
@@ -39,8 +38,7 @@ interface ScrapeResult {
   originalData: {
     name?: string
     code?: string
-    site: string
-    brand?: string
+    brand: string
   }
 }
 
@@ -97,41 +95,85 @@ export default function BulkResultsTable({
     }
   }
 
-  const exportToExcel = () => {
+  // Helper function to escape CSV values
+  const escapeCsvValue = (value: string): string => {
+    if (!value) return ""
+    // If value contains comma, quote, or newline, wrap in quotes and escape quotes
+    if (value.includes(",") || value.includes('"') || value.includes("\n")) {
+      return `"${value.replace(/"/g, '""')}"`
+    }
+    return value
+  }
+
+  // Helper function to get export data
+  const getExportData = () => {
     // Filter to only successful results with valid product data
     const successfulResults = results.filter(
       (r) => r.status === "success" && r.product
     )
 
     if (successfulResults.length === 0) {
-      toast({
-        title: "No data to export",
-        description: "There are no successful scraping results to export",
-        variant: "destructive",
-      })
-      return
+      return null
     }
 
-    // Define Excel headers
+    // Helper function to extract value from specifications
+    const getSpecValue = (
+      specs: Record<string, string> | undefined,
+      keys: string[]
+    ): string => {
+      if (!specs) return ""
+      for (const key of keys) {
+        // Try exact match first
+        if (specs[key]) return specs[key]
+        // Try case-insensitive match
+        const foundKey = Object.keys(specs).find(
+          (k) => k.toLowerCase() === key.toLowerCase()
+        )
+        if (foundKey) return specs[foundKey]
+      }
+      return ""
+    }
+
+    // Define headers
     const headers = [
       "Name",
       "Code",
+      "Barcode",
       "Price",
       "Brand",
+      "Category",
       "Description",
       "Specifications",
       "Images",
       "Source URL",
     ]
 
-    // Transform products to Excel rows
+    // Transform products to rows
     const rows = successfulResults.map((result) => {
       const product = result.product!
+      const barcode = getSpecValue(product.specifications, [
+        "barcode",
+        "Barcode",
+        "BARCODE",
+        "ean",
+        "EAN",
+        "upc",
+        "UPC",
+      ])
+      const category = getSpecValue(product.specifications, [
+        "category",
+        "Category",
+        "CATEGORY",
+        "category_name",
+        "Category Name",
+      ])
       return [
         product.name || "",
         product.code || "",
+        barcode,
         product.price || "",
         product.brand || "",
+        category,
         product.description || "",
         product.specifications
           ? JSON.stringify(product.specifications)
@@ -141,13 +183,37 @@ export default function BulkResultsTable({
       ]
     })
 
-    // Create worksheet with headers and data
-    const worksheetData = [headers, ...rows]
-    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData)
+    return { headers, rows, count: successfulResults.length }
+  }
 
-    // Create workbook and add worksheet
-    const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Scraping Results")
+  const exportToCsv = () => {
+    const exportData = getExportData()
+
+    if (!exportData) {
+      toast({
+        title: "No data to export",
+        description: "There are no successful scraping results to export",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Create CSV content
+    const csvRows: string[] = []
+
+    // Add headers
+    csvRows.push(exportData.headers.map(escapeCsvValue).join(","))
+
+    // Add data rows
+    exportData.rows.forEach((row) => {
+      csvRows.push(row.map((cell) => escapeCsvValue(String(cell))).join(","))
+    })
+
+    const csvContent = csvRows.join("\n")
+
+    // Create blob and trigger download
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
 
     // Generate filename with timestamp
     const now = new Date()
@@ -156,14 +222,20 @@ export default function BulkResultsTable({
       .replace(/T/, "-")
       .replace(/\..+/, "")
       .replace(/:/g, "-")
-    const filename = `scraping-results-${timestamp}.xlsx`
+    const filename = `scraping-results-${timestamp}.csv`
 
-    // Write file and trigger download
-    XLSX.writeFile(workbook, filename)
+    // Create download link and trigger
+    const link = document.createElement("a")
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
 
     toast({
       title: "Export successful",
-      description: `Exported ${successfulResults.length} product(s) to ${filename}`,
+      description: `Exported ${exportData.count} product(s) to ${filename}`,
     })
   }
 
@@ -183,11 +255,11 @@ export default function BulkResultsTable({
             <Button
               variant="outline"
               size="sm"
-              onClick={exportToExcel}
+              onClick={exportToCsv}
               className="gap-2"
             >
               <DownloadIcon className="w-4 h-4" />
-              Export to Excel
+              Export to CSV
             </Button>
           )}
         </div>
@@ -307,7 +379,7 @@ export default function BulkResultsTable({
                 </p>
                 <div className="text-xs text-muted-foreground space-y-1">
                   <p>
-                    <strong>Site:</strong> {selectedResult.originalData.site}
+                    <strong>Brand:</strong> {selectedResult.originalData.brand}
                   </p>
                   {selectedResult.originalData.name && (
                     <p>
@@ -317,11 +389,6 @@ export default function BulkResultsTable({
                   {selectedResult.originalData.code && (
                     <p>
                       <strong>Code:</strong> {selectedResult.originalData.code}
-                    </p>
-                  )}
-                  {selectedResult.originalData.brand && (
-                    <p>
-                      <strong>Brand:</strong> {selectedResult.originalData.brand}
                     </p>
                   )}
                 </div>

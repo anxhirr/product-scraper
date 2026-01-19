@@ -6,8 +6,7 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:800
 interface BatchProductRequest {
   name?: string
   code?: string
-  site: string
-  brand?: string
+  brand: string
 }
 
 interface BatchRequest {
@@ -165,7 +164,6 @@ export async function POST(request: NextRequest) {
         products: products.map((p) => ({
           name: p.name,
           code: p.code,
-          site: p.site,
           brand: p.brand,
         })),
         batch_size: batchSize,

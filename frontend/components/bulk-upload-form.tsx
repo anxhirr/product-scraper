@@ -21,8 +21,7 @@ interface ExcelRow {
 interface MappedProduct {
   name?: string
   code?: string
-  site: string
-  brand?: string
+  brand: string
 }
 
 interface ScrapeResult {
@@ -39,7 +38,6 @@ export default function BulkUploadForm() {
   const [columnMapping, setColumnMapping] = useState<{
     name?: string
     code?: string
-    site?: string
     brand?: string
   }>({})
   const [batchSize, setBatchSize] = useState(20)
@@ -54,7 +52,6 @@ export default function BulkUploadForm() {
     const mapping: {
       name?: string
       code?: string
-      site?: string
       brand?: string
     } = {}
 
@@ -107,26 +104,6 @@ export default function BulkUploadForm() {
       /^identifikimi$/i,
     ]
 
-    // Patterns for site/website (English and Albanian)
-    const sitePatterns = [
-      /^site$/i,
-      /^website$/i,
-      /^web\s*site$/i,
-      /^url$/i,
-      /^source$/i,
-      /^source\s*site$/i,
-      /^scraper$/i,
-      /^scraper\s*site$/i,
-      // Albanian patterns
-      /^faqja$/i,
-      /^faqja\s*web$/i,
-      /^website$/i,
-      /^burimi$/i,
-      /^faqja\s*e\s*burimit$/i,
-      /^vendndodhja$/i,
-      /^adresa$/i,
-    ]
-
     // Patterns for brand (English and Albanian)
     const brandPatterns = [
       /^brand$/i,
@@ -165,16 +142,6 @@ export default function BulkUploadForm() {
         for (const pattern of codePatterns) {
           if (pattern.test(normalized)) {
             mapping.code = col
-            break
-          }
-        }
-      }
-
-      // Check for site
-      if (!mapping.site) {
-        for (const pattern of sitePatterns) {
-          if (pattern.test(normalized)) {
-            mapping.site = col
             break
           }
         }
@@ -255,7 +222,6 @@ export default function BulkUploadForm() {
         const detectedFields = []
         if (autoMappings.name) detectedFields.push("Name")
         if (autoMappings.code) detectedFields.push("Code")
-        if (autoMappings.site) detectedFields.push("Site")
         if (autoMappings.brand) detectedFields.push("Brand")
 
         if (totalRows > MAX_ROWS) {
@@ -286,17 +252,16 @@ export default function BulkUploadForm() {
   const handleMappingChange = (mapping: {
     name?: string
     code?: string
-    site?: string
     brand?: string
   }) => {
     setColumnMapping(mapping)
   }
 
   const validateMapping = (): boolean => {
-    if (!columnMapping.site) {
+    if (!columnMapping.brand) {
       toast({
         title: "Mapping required",
-        description: "Please map the 'Website/Site' column",
+        description: "Please map the 'Brand' column",
         variant: "destructive",
       })
       return false
@@ -343,7 +308,7 @@ export default function BulkUploadForm() {
     // Map Excel data to product requests
     const products: MappedProduct[] = excelData.map((row) => {
       const product: MappedProduct = {
-        site: String(row[columnMapping.site!] || "").trim(),
+        brand: String(row[columnMapping.brand!] || "").trim(),
       }
 
       if (columnMapping.name && row[columnMapping.name]) {
@@ -352,22 +317,19 @@ export default function BulkUploadForm() {
       if (columnMapping.code && row[columnMapping.code]) {
         product.code = String(row[columnMapping.code]).trim()
       }
-      if (columnMapping.brand && row[columnMapping.brand]) {
-        product.brand = String(row[columnMapping.brand]).trim()
-      }
 
       return product
     })
 
     // Filter out invalid products
     const validProducts = products.filter(
-      (p) => p.site && (p.name || p.code)
+      (p) => p.brand && (p.name || p.code)
     )
 
     if (validProducts.length === 0) {
       toast({
         title: "No valid products",
-        description: "No products found with valid name/code and site",
+        description: "No products found with valid name/code and brand",
         variant: "destructive",
       })
       setIsScraping(false)

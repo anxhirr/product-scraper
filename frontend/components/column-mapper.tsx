@@ -16,13 +16,11 @@ interface ColumnMapperProps {
   mapping: {
     name?: string
     code?: string
-    site?: string
     brand?: string
   }
   onMappingChange: (mapping: {
     name?: string
     code?: string
-    site?: string
     brand?: string
   }) => void
 }
@@ -32,7 +30,7 @@ export default function ColumnMapper({
   mapping,
   onMappingChange,
 }: ColumnMapperProps) {
-  const handleChange = (field: "name" | "code" | "site" | "brand", value: string) => {
+  const handleChange = (field: "name" | "code" | "brand", value: string) => {
     const newMapping = { ...mapping }
     if (value === "skip") {
       delete newMapping[field]
@@ -43,13 +41,12 @@ export default function ColumnMapper({
   }
 
   const isNameOrCodeMapped = mapping.name || mapping.code
-  const isSiteMapped = mapping.site
+  const isBrandMapped = mapping.brand
 
   // Check which fields are auto-detected (have a mapping)
   const autoDetectedFields = {
     name: !!mapping.name,
     code: !!mapping.code,
-    site: !!mapping.site,
     brand: !!mapping.brand,
   }
 
@@ -58,7 +55,7 @@ export default function ColumnMapper({
       <CardHeader>
         <CardTitle>Map Columns</CardTitle>
         <CardDescription>
-          Map Excel columns to product fields. At least one of Name or Code is required, and Site
+          Map Excel columns to product fields. At least one of Name or Code is required, and Brand
           is required. {Object.values(autoDetectedFields).some(v => v) && "Some columns have been auto-detected."}
         </CardDescription>
       </CardHeader>
@@ -120,33 +117,8 @@ export default function ColumnMapper({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="map-site">
-                Website/Site <span className="text-destructive">*</span>
-                {autoDetectedFields.site && (
-                  <span className="text-xs text-muted-foreground ml-2">(auto-detected)</span>
-                )}
-              </Label>
-              <Select
-                value={mapping.site || "skip"}
-                onValueChange={(value) => handleChange("site", value)}
-              >
-                <SelectTrigger id="map-site">
-                  <SelectValue placeholder="Select column" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="skip">Skip</SelectItem>
-                  {columns.map((col) => (
-                    <SelectItem key={col} value={col}>
-                      {col}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
               <Label htmlFor="map-brand">
-                Brand (Optional)
+                Brand <span className="text-destructive">*</span>
                 {autoDetectedFields.brand && (
                   <span className="text-xs text-muted-foreground ml-2">(auto-detected)</span>
                 )}
@@ -171,11 +143,11 @@ export default function ColumnMapper({
           </div>
 
           {/* Validation Messages */}
-          {(!isNameOrCodeMapped || !isSiteMapped) && (
+          {(!isNameOrCodeMapped || !isBrandMapped) && (
             <div className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
               <AlertCircleIcon className="w-4 h-4 text-destructive mt-0.5" />
               <div className="text-sm text-destructive">
-                {!isSiteMapped && "Please map the 'Website/Site' column. "}
+                {!isBrandMapped && "Please map the 'Brand' column. "}
                 {!isNameOrCodeMapped &&
                   "Please map either 'Product Name' or 'Product Code' column."}
               </div>

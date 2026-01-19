@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
-from scraper.registry import get_scraper, get_available_sites
+from scraper.registry import get_scraper, get_available_sites, get_sites_for_brand, get_available_brands
 from scraper.models import Product
 
 router = APIRouter()
@@ -36,10 +36,16 @@ def list_sites():
     return get_available_sites()
 
 
+@router.get("/brands", response_model=list[str])
+def list_brands():
+    """Returns a list of available brand identifiers."""
+    return get_available_brands()
+
+
 class BatchSearchRequest(BaseModel):
     name: Optional[str] = None
     code: Optional[str] = None
-    site: str
+    site: Optional[str] = None  # Made optional, brand takes priority
     brand: Optional[str] = None
 
 
@@ -56,17 +62,53 @@ class BatchSearchResponse(BaseModel):
 
 
 def scrape_single_product(request: BatchSearchRequest) -> BatchSearchResponse:
-    """Helper function to scrape a single product, used in thread pool."""
-    try:
-        scraper = get_scraper(request.site)
-        # Use code if provided, otherwise use name
-        query = request.code if request.code else (request.name or "")
-        product = scraper.scrape_product(query)
-        return BatchSearchResponse(product=product, status="success")
-    except ValueError as e:
-        return BatchSearchResponse(error=str(e), status="error")
-    except Exception as e:
-        return BatchSearchResponse(error=f"Scraping failed: {str(e)}", status="error")
+    """
+    Helper function to scrape a single product, used in thread pool.
+    Supports brand-based scraping with fallback to multiple sites.
+    """
+    # Determine which sites to try
+    sites_to_try: list[str] = []
+    
+    if request.brand:
+        # Brand takes priority - get ordered list of sites for this brand
+        try:
+            sites_to_try = get_sites_for_brand(request.brand)
+        except ValueError as e:
+            return BatchSearchResponse(error=str(e), status="error")
+    elif request.site:
+        # Fallback to direct site specification (backward compatibility)
+        sites_to_try = [request.site]
+    else:
+        return BatchSearchResponse(
+            error="Either brand or site must be provided", status="error"
+        )
+    
+    # Use code if provided, otherwise use name
+    query = request.code if request.code else (request.name or "")
+    if not query:
+        return BatchSearchResponse(
+            error="Either name or code must be provided", status="error"
+        )
+    
+    # Try each site in order until one succeeds
+    last_error: Optional[str] = None
+    for site in sites_to_try:
+        try:
+            scraper = get_scraper(site)
+            product = scraper.scrape_product(query)
+            return BatchSearchResponse(product=product, status="success")
+        except ValueError as e:
+            # ValueError means site not found, but we should continue to next site
+            last_error = str(e)
+            continue
+        except Exception as e:
+            # Other exceptions - try next site
+            last_error = f"Scraping failed on {site}: {str(e)}"
+            continue
+    
+    # All sites failed
+    error_msg = last_error or f"All sites failed for brand/site: {request.brand or request.site}"
+    return BatchSearchResponse(error=error_msg, status="error")
 
 
 @router.post("/search/batch", response_model=List[BatchSearchResponse])
@@ -86,9 +128,10 @@ def batch_search(body: BatchSearchRequestBody):
 
     # Validate all requests
     for i, req in enumerate(products):
-        if not req.site:
+        if not req.brand and not req.site:
             raise HTTPException(
-                status_code=400, detail=f"Product {i + 1}: site is required"
+                status_code=400,
+                detail=f"Product {i + 1}: either brand or site must be provided",
             )
         if not req.name and not req.code:
             raise HTTPException(

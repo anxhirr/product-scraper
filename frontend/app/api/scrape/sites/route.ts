@@ -4,7 +4,7 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:800
 
 export async function GET() {
   try {
-    const response = await fetch(`${BACKEND_URL}/sites`, {
+    const response = await fetch(`${BACKEND_URL}/brands`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -15,12 +15,12 @@ export async function GET() {
       throw new Error(`Backend responded with status ${response.status}`)
     }
 
-    const sites = await response.json()
-    return NextResponse.json(sites)
+    const brands = await response.json()
+    return NextResponse.json(brands)
   } catch (error) {
-    console.error("Error fetching sites:", error)
+    console.error("Error fetching brands:", error)
     return NextResponse.json(
-      { error: "Failed to fetch available sites" },
+      { error: "Failed to fetch available brands" },
       { status: 500 }
     )
   }
