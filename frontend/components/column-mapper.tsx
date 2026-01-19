@@ -20,6 +20,7 @@ interface ColumnMapperProps {
     category?: string
     barcode?: string
     price?: string
+    quantity?: string
   }
   onMappingChange: (mapping: {
     name?: string
@@ -28,6 +29,7 @@ interface ColumnMapperProps {
     category?: string
     barcode?: string
     price?: string
+    quantity?: string
   }) => void
 }
 
@@ -37,7 +39,7 @@ export default function ColumnMapper({
   onMappingChange,
 }: ColumnMapperProps) {
   const handleChange = (
-    field: "name" | "code" | "brand" | "category" | "barcode" | "price",
+    field: "name" | "code" | "brand" | "category" | "barcode" | "price" | "quantity",
     value: string
   ) => {
     const newMapping = { ...mapping }
@@ -60,6 +62,7 @@ export default function ColumnMapper({
     category: !!mapping.category,
     barcode: !!mapping.barcode,
     price: !!mapping.price,
+    quantity: !!mapping.quantity,
   }
 
   return (
@@ -215,6 +218,31 @@ export default function ColumnMapper({
                 onValueChange={(value) => handleChange("category", value)}
               >
                 <SelectTrigger id="map-category">
+                  <SelectValue placeholder="Select column" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="skip">Skip</SelectItem>
+                  {columns.map((col) => (
+                    <SelectItem key={col} value={col}>
+                      {col}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="map-quantity">
+                Quantity
+                {autoDetectedFields.quantity && (
+                  <span className="text-xs text-muted-foreground ml-2">(auto-detected)</span>
+                )}
+              </Label>
+              <Select
+                value={mapping.quantity || "skip"}
+                onValueChange={(value) => handleChange("quantity", value)}
+              >
+                <SelectTrigger id="map-quantity">
                   <SelectValue placeholder="Select column" />
                 </SelectTrigger>
                 <SelectContent>

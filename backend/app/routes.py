@@ -50,6 +50,7 @@ class BatchSearchRequest(BaseModel):
     category: Optional[str] = None
     barcode: Optional[str] = None
     price: Optional[str] = None
+    quantity: Optional[str] = None
 
 
 class BatchSearchRequestBody(BaseModel):
@@ -65,13 +66,14 @@ class BatchSearchResponse(BaseModel):
     category: Optional[str] = None
     barcode: Optional[str] = None
     price: Optional[str] = None
+    quantity: Optional[str] = None
 
 
 def scrape_single_product(request: BatchSearchRequest) -> BatchSearchResponse:
     """
     Helper function to scrape a single product, used in thread pool.
     Supports brand-based scraping with fallback to multiple sites.
-    Preserves Excel values for category, barcode, and price.
+    Preserves Excel values for category, barcode, price, and quantity.
     """
     # Determine which sites to try
     sites_to_try: list[str] = []
@@ -87,6 +89,7 @@ def scrape_single_product(request: BatchSearchRequest) -> BatchSearchResponse:
                 category=request.category,
                 barcode=request.barcode,
                 price=request.price,
+                quantity=request.quantity,
             )
     elif request.site:
         # Fallback to direct site specification (backward compatibility)
@@ -98,6 +101,7 @@ def scrape_single_product(request: BatchSearchRequest) -> BatchSearchResponse:
             category=request.category,
             barcode=request.barcode,
             price=request.price,
+            quantity=request.quantity,
         )
     
     # Use code if provided, otherwise use name
@@ -109,6 +113,7 @@ def scrape_single_product(request: BatchSearchRequest) -> BatchSearchResponse:
             category=request.category,
             barcode=request.barcode,
             price=request.price,
+            quantity=request.quantity,
         )
     
     # Try each site in order until one succeeds
@@ -123,6 +128,7 @@ def scrape_single_product(request: BatchSearchRequest) -> BatchSearchResponse:
                 category=request.category,
                 barcode=request.barcode,
                 price=request.price,
+                quantity=request.quantity,
             )
         except ValueError as e:
             # ValueError means site not found, but we should continue to next site
@@ -141,6 +147,7 @@ def scrape_single_product(request: BatchSearchRequest) -> BatchSearchResponse:
         category=request.category,
         barcode=request.barcode,
         price=request.price,
+        quantity=request.quantity,
     )
 
 

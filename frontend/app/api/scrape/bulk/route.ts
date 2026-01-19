@@ -10,6 +10,7 @@ interface BatchProductRequest {
   category?: string
   barcode?: string
   price?: string
+  quantity?: string
 }
 
 interface BatchRequest {
@@ -35,6 +36,7 @@ interface BackendBatchResponse {
   category?: string
   barcode?: string
   price?: string
+  quantity?: string
 }
 
 interface ProductData {
@@ -95,7 +97,8 @@ async function mapProductToProductData(
   brand?: string,
   excelPrice?: string,
   excelBarcode?: string,
-  excelCategory?: string
+  excelCategory?: string,
+  excelQuantity?: string
 ): Promise<ProductData> {
   // Parse specifications first
   const parsedSpecs = parseSpecifications(backendProduct.specifications)
@@ -140,6 +143,9 @@ async function mapProductToProductData(
   }
   if (excelCategory) {
     finalSpecs["Category"] = excelCategory
+  }
+  if (excelQuantity) {
+    finalSpecs["Quantity"] = excelQuantity
   }
 
   // Use Excel price if provided, otherwise use scraped price
@@ -189,6 +195,7 @@ export async function POST(request: NextRequest) {
           category: p.category,
           barcode: p.barcode,
           price: p.price,
+          quantity: p.quantity,
         })),
         batch_size: batchSize,
         batch_delay: batchDelay,
@@ -224,6 +231,7 @@ export async function POST(request: NextRequest) {
             const excelPrice = backendResult.price || originalData.price
             const excelBarcode = backendResult.barcode || originalData.barcode
             const excelCategory = backendResult.category || originalData.category
+            const excelQuantity = backendResult.quantity || originalData.quantity
 
             const productData = await mapProductToProductData(
               backendResult.product,
@@ -231,7 +239,8 @@ export async function POST(request: NextRequest) {
               originalData.brand,
               excelPrice,
               excelBarcode,
-              excelCategory
+              excelCategory,
+              excelQuantity
             )
             return {
               product: productData,

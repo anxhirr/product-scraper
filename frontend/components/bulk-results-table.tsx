@@ -42,6 +42,7 @@ interface ScrapeResult {
     category?: string
     barcode?: string
     price?: string
+    quantity?: string
   }
 }
 
@@ -143,6 +144,7 @@ export default function BulkResultsTable({
       "Code",
       "Barcode",
       "Price",
+      "Quantity",
       "Brand",
       "Category",
       "Description",
@@ -171,12 +173,22 @@ export default function BulkResultsTable({
         "category_name",
         "Category Name",
       ])
+      const quantity = result.originalData.quantity || getSpecValue(product.specifications, [
+        "quantity",
+        "Quantity",
+        "QUANTITY",
+        "qty",
+        "Qty",
+        "stock",
+        "Stock",
+      ])
       const price = result.originalData.price || product.price || ""
       return [
         product.name || "",
         product.code || "",
         barcode,
         price,
+        quantity,
         product.brand || "",
         category,
         product.description || "",

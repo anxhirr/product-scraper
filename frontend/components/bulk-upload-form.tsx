@@ -25,6 +25,7 @@ interface MappedProduct {
   category?: string
   barcode?: string
   price?: string
+  quantity?: string
 }
 
 interface ScrapeResult {
@@ -45,6 +46,7 @@ export default function BulkUploadForm() {
     category?: string
     barcode?: string
     price?: string
+    quantity?: string
   }>({})
   const [batchSize, setBatchSize] = useState(20)
   const [batchDelay, setBatchDelay] = useState(1000)
@@ -62,6 +64,7 @@ export default function BulkUploadForm() {
       category?: string
       barcode?: string
       price?: string
+      quantity?: string
     } = {}
 
     const normalizedColumns = columnNames.map((col) => col.toLowerCase().trim())
@@ -157,6 +160,7 @@ export default function BulkUploadForm() {
       /^product\s*code$/i,
       // Albanian patterns
       /^barkod$/i,
+      /^barkodi$/i,
       /^bar\s*kod$/i,
       /^kodi\s*i\s*barkodit$/i,
     ]
@@ -175,6 +179,25 @@ export default function BulkUploadForm() {
       /^kategoritë$/i,
       /^lloji$/i,
       /^lloji\s*i\s*produktit$/i,
+    ]
+
+    // Patterns for quantity (English and Albanian)
+    const quantityPatterns = [
+      /^quantity$/i,
+      /^qty$/i,
+      /^qty\.$/i,
+      /^stock$/i,
+      /^inventory$/i,
+      /^available$/i,
+      /^available\s*quantity$/i,
+      /^stock\s*quantity$/i,
+      // Albanian patterns
+      /^sasia$/i,
+      /^sasi$/i,
+      /^stoku$/i,
+      /^stok$/i,
+      /^disponueshme$/i,
+      /^sasia\s*e\s*disponueshme$/i,
     ]
 
     // Find matches
@@ -237,6 +260,16 @@ export default function BulkUploadForm() {
         for (const pattern of categoryPatterns) {
           if (pattern.test(normalized)) {
             mapping.category = col
+            break
+          }
+        }
+      }
+
+      // Check for quantity
+      if (!mapping.quantity) {
+        for (const pattern of quantityPatterns) {
+          if (pattern.test(normalized)) {
+            mapping.quantity = col
             break
           }
         }
@@ -311,6 +344,7 @@ export default function BulkUploadForm() {
         if (autoMappings.price) detectedFields.push("Price")
         if (autoMappings.barcode) detectedFields.push("Barcode")
         if (autoMappings.category) detectedFields.push("Category")
+        if (autoMappings.quantity) detectedFields.push("Quantity")
 
         if (totalRows > MAX_ROWS) {
           toast({
@@ -344,6 +378,7 @@ export default function BulkUploadForm() {
     category?: string
     barcode?: string
     price?: string
+    quantity?: string
   }) => {
     setColumnMapping(mapping)
   }
@@ -416,6 +451,9 @@ export default function BulkUploadForm() {
       }
       if (columnMapping.category && row[columnMapping.category]) {
         product.category = String(row[columnMapping.category]).trim()
+      }
+      if (columnMapping.quantity && row[columnMapping.quantity]) {
+        product.quantity = String(row[columnMapping.quantity]).trim()
       }
 
       return product
