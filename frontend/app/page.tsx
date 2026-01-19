@@ -1,5 +1,7 @@
 import ProductScraperForm from "@/components/product-scraper-form"
-import { SearchIcon } from "lucide-react"
+import { SearchIcon, FileSpreadsheetIcon } from "lucide-react"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
 
 export default function Home() {
   return (
@@ -15,6 +17,14 @@ export default function Home() {
               "Enter product details to automatically find descriptions, specifications, and photos from official brand websites"
             }
           </p>
+          <div className="pt-4">
+            <Button variant="outline" asChild>
+              <Link href="/bulk">
+                <FileSpreadsheetIcon className="w-4 h-4 mr-2" />
+                Bulk Upload (Excel)
+              </Link>
+            </Button>
+          </div>
         </div>
 
         <ProductScraperForm />
