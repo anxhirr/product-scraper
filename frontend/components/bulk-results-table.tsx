@@ -25,7 +25,10 @@ import {
   ClockIcon,
   ExternalLinkIcon,
   EyeIcon,
+  DownloadIcon,
 } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import * as XLSX from "xlsx"
 import type { ProductData } from "./product-scraper-form"
 import ProductResults from "./product-results"
 
@@ -50,6 +53,7 @@ export default function BulkResultsTable({
   results,
   isScraping,
 }: BulkResultsTableProps) {
+  const { toast } = useToast()
   const [selectedResult, setSelectedResult] = useState<ScrapeResult | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
@@ -93,6 +97,76 @@ export default function BulkResultsTable({
     }
   }
 
+  const exportToExcel = () => {
+    // Filter to only successful results with valid product data
+    const successfulResults = results.filter(
+      (r) => r.status === "success" && r.product
+    )
+
+    if (successfulResults.length === 0) {
+      toast({
+        title: "No data to export",
+        description: "There are no successful scraping results to export",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Define Excel headers
+    const headers = [
+      "Name",
+      "Code",
+      "Price",
+      "Brand",
+      "Description",
+      "Specifications",
+      "Images",
+      "Source URL",
+    ]
+
+    // Transform products to Excel rows
+    const rows = successfulResults.map((result) => {
+      const product = result.product!
+      return [
+        product.name || "",
+        product.code || "",
+        product.price || "",
+        product.brand || "",
+        product.description || "",
+        product.specifications
+          ? JSON.stringify(product.specifications)
+          : "",
+        product.images?.join(",") || "",
+        product.sourceUrl || "",
+      ]
+    })
+
+    // Create worksheet with headers and data
+    const worksheetData = [headers, ...rows]
+    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData)
+
+    // Create workbook and add worksheet
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Scraping Results")
+
+    // Generate filename with timestamp
+    const now = new Date()
+    const timestamp = now
+      .toISOString()
+      .replace(/T/, "-")
+      .replace(/\..+/, "")
+      .replace(/:/g, "-")
+    const filename = `scraping-results-${timestamp}.xlsx`
+
+    // Write file and trigger download
+    XLSX.writeFile(workbook, filename)
+
+    toast({
+      title: "Export successful",
+      description: `Exported ${successfulResults.length} product(s) to ${filename}`,
+    })
+  }
+
 
   return (
     <Card>
@@ -105,6 +179,17 @@ export default function BulkResultsTable({
               {pendingCount > 0 && `, ${pendingCount} pending`}
             </CardDescription>
           </div>
+          {successCount > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportToExcel}
+              className="gap-2"
+            >
+              <DownloadIcon className="w-4 h-4" />
+              Export to Excel
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent>

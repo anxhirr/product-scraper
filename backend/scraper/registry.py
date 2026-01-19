@@ -1,5 +1,5 @@
 from scraper.base_scraper import BaseScraper
-from scraper.hape_scraper import HapeScraper
+# from scraper.hape_scraper import HapeScraper
 from scraper.hape_global_scraper import HapeGlobalScraper
 from scraper.elrincondelosgenios_scraper import ElRinconDeLosGeniosScraper
 from scraper.elrincondelosgenios_api_scraper import ElRinconDeLosGeniosApiScraper
@@ -7,7 +7,8 @@ from scraper.elrincondelosgenios_api_scraper import ElRinconDeLosGeniosApiScrape
 
 # Registry mapping site identifiers to scraper classes
 SCRAPER_REGISTRY = {
-    "hape": HapeScraper,
+    # "hape": HapeScraper,
+    "hape": HapeGlobalScraper,
     "hape_global": HapeGlobalScraper,
     "elrincondelosgenios": ElRinconDeLosGeniosScraper,
     "elrincondelosgenios_api": ElRinconDeLosGeniosApiScraper,
@@ -19,7 +20,7 @@ def get_scraper(site: str) -> BaseScraper:
     Factory function that returns an instance of the appropriate scraper for the given site.
     
     Args:
-        site: Site identifier (e.g., "hape", "elrincondelosgenios")
+        site: Site identifier (e.g., "hape", "hape_global", "elrincondelosgenios")
     
     Returns:
         An instance of the appropriate scraper class

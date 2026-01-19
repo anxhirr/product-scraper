@@ -330,16 +330,9 @@ export default function ProductResults({ data }: ProductResultsProps) {
             </div>
           </CardHeader>
           <CardContent>
-            <dl className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {Object.entries(currentSpecifications)
-                .filter(([key]) => key.toLowerCase() !== "specifications")
-                .map(([key, value]) => (
-                  <div key={key} className="space-y-1">
-                    <dt className="text-sm font-medium text-muted-foreground">{key}</dt>
-                    <dd className="text-sm text-foreground">{value}</dd>
-                  </div>
-                ))}
-            </dl>
+            <p className="text-foreground leading-relaxed whitespace-pre-line">
+              {formatSpecifications(currentSpecifications)}
+            </p>
           </CardContent>
         </Card>
       )}
