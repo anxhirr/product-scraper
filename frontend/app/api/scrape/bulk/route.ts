@@ -180,8 +180,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Call backend batch API
-    const backendUrl = `${BACKEND_URL}/search/batch`
+    // Create async job on backend
+    const backendUrl = `${BACKEND_URL}/jobs`
     const response = await fetch(backendUrl, {
       method: "POST",
       headers: {
@@ -218,61 +218,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const backendResults: BackendBatchResponse[] = await response.json()
+    const jobData: { job_id: string } = await response.json()
 
-    // Map backend results to frontend format and translate
-    const results: ScrapeResult[] = await Promise.all(
-      backendResults.map(async (backendResult, index) => {
-        const originalData = products[index]
-
-        if (backendResult.status === "success" && backendResult.product) {
-          try {
-            // Use preserved fields from backend response, fallback to original data
-            const excelPrice = backendResult.price || originalData.price
-            const excelBarcode = backendResult.barcode || originalData.barcode
-            const excelCategory = backendResult.category || originalData.category
-            const excelQuantity = backendResult.quantity || originalData.quantity
-
-            const productData = await mapProductToProductData(
-              backendResult.product,
-              originalData.code || "",
-              originalData.brand,
-              excelPrice,
-              excelBarcode,
-              excelCategory,
-              excelQuantity
-            )
-            return {
-              product: productData,
-              status: "success" as const,
-              originalData,
-            }
-          } catch (error) {
-            return {
-              error:
-                error instanceof Error
-                  ? error.message
-                  : "Failed to process product data",
-              status: "error" as const,
-              originalData,
-            }
-          }
-        } else {
-          return {
-            error: backendResult.error || "Unknown error",
-            status: "error" as const,
-            originalData,
-          }
-        }
-      })
-    )
-
-    return NextResponse.json({ results })
+    return NextResponse.json({ job_id: jobData.job_id })
   } catch (error) {
     console.error("Bulk scraping error:", error)
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Failed to scrape products",
+        error: error instanceof Error ? error.message : "Failed to start scraping job",
       },
       { status: 500 }
     )

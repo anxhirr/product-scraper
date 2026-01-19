@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select"
 import { SearchIcon } from "lucide-react"
 import ProductResults from "@/components/product-results"
+import { usePolling } from "@/hooks/use-polling"
 
 export interface ProductData {
   name: string
@@ -45,6 +46,7 @@ export default function ProductScraperForm() {
   const [results, setResults] = useState<ProductData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isMounted, setIsMounted] = useState(false)
+  const [jobId, setJobId] = useState<string | null>(null)
 
   // Mark component as mounted (client-side only)
   useEffect(() => {
@@ -93,6 +95,58 @@ export default function ProductScraperForm() {
     fetchBrands()
   }, [isMounted])
 
+  // Polling function for job status
+  const pollJobStatus = useCallback(async () => {
+    if (!jobId) return null
+
+    const response = await fetch(`/api/scrape/jobs/${jobId}`)
+    if (!response.ok) {
+      throw new Error("Failed to get job status")
+    }
+    return response.json()
+  }, [jobId])
+
+  // Polling hook
+  const { data: jobStatus, error: pollingError, isPolling } = usePolling<{
+    status: string
+    results: Array<{
+      product?: ProductData
+      error?: string
+      status: "success" | "error" | "pending"
+    }>
+    progress: number
+    error?: string
+  }>({
+    pollFn: pollJobStatus,
+    enabled: !!jobId && loading,
+    interval: 5000, // Poll every 5 seconds
+    onSuccess: (data) => {
+      if (data.status === "completed" || data.status === "failed") {
+        setLoading(false)
+        if (data.status === "completed" && data.results.length > 0) {
+          const result = data.results[0]
+          if (result.status === "success" && result.product) {
+            setResults(result.product)
+            setError(null)
+          } else {
+            setError(result.error || "Failed to scrape product")
+            setResults(null)
+          }
+        } else if (data.status === "failed") {
+          setError(data.error || "Job failed")
+          setResults(null)
+        }
+        setJobId(null) // Stop polling
+      }
+    },
+    onError: (err) => {
+      setError(err.message)
+      setLoading(false)
+      setJobId(null)
+    },
+    shouldStop: (data) => data.status === "completed" || data.status === "failed",
+  })
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
@@ -105,6 +159,7 @@ export default function ProductScraperForm() {
     setLoading(true)
     setError(null)
     setResults(null)
+    setJobId(null)
 
     try {
       const response = await fetch("/api/scrape", {
@@ -116,15 +171,20 @@ export default function ProductScraperForm() {
       })
 
       if (!response.ok) {
-        throw new Error("Failed to scrape product data")
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || "Failed to start scraping job")
       }
 
       const data = await response.json()
-      setResults(data)
+      if (data.job_id) {
+        setJobId(data.job_id)
+      } else {
+        throw new Error("No job ID returned")
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred")
-    } finally {
       setLoading(false)
+      setJobId(null)
     }
   }
 
@@ -177,11 +237,11 @@ export default function ProductScraperForm() {
                 />
               </div>
             </div>
-            <Button type="submit" disabled={loading} className="w-full md:w-auto">
-              {loading ? (
+            <Button type="submit" disabled={loading || isPolling} className="w-full md:w-auto">
+              {loading || isPolling ? (
                 <>
                   <span className="animate-spin mr-2">⏳</span>
-                  Searching...
+                  {isPolling ? "Searching..." : "Starting..."}
                 </>
               ) : (
                 <>
@@ -194,10 +254,10 @@ export default function ProductScraperForm() {
         </CardContent>
       </Card>
 
-      {error && (
+      {(error || pollingError) && (
         <Card className="border-destructive">
           <CardContent className="pt-6">
-            <p className="text-destructive">{error}</p>
+            <p className="text-destructive">{error || pollingError?.message}</p>
           </CardContent>
         </Card>
       )}

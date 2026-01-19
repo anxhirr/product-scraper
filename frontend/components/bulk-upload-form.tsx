@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,6 +13,7 @@ import * as XLSX from "xlsx"
 import ColumnMapper from "./column-mapper"
 import BulkResultsTable from "./bulk-results-table"
 import type { ProductData } from "./product-scraper-form"
+import { usePolling } from "@/hooks/use-polling"
 
 interface ExcelRow {
   [key: string]: string | number | null
@@ -54,6 +55,8 @@ export default function BulkUploadForm() {
   const [scrapeProgress, setScrapeProgress] = useState(0)
   const [results, setResults] = useState<ScrapeResult[]>([])
   const [file, setFile] = useState<File | null>(null)
+  const [jobId, setJobId] = useState<string | null>(null)
+  const [validProducts, setValidProducts] = useState<MappedProduct[]>([])
 
   // Auto-detect column mappings based on column names
   const autoDetectMappings = useCallback((columnNames: string[]) => {
@@ -395,6 +398,140 @@ export default function BulkUploadForm() {
     return true
   }
 
+  // Polling function for job status
+  const pollJobStatus = useCallback(async () => {
+    if (!jobId) return null
+
+    const response = await fetch(`/api/scrape/jobs/${jobId}`)
+    if (!response.ok) {
+      throw new Error("Failed to get job status")
+    }
+    return response.json()
+  }, [jobId])
+
+  // Use refs to track current values to prevent stale callbacks
+  const jobIdRef = useRef<string | null>(null)
+  const scrapeProgressRef = useRef(0)
+  useEffect(() => {
+    jobIdRef.current = jobId
+  }, [jobId])
+  useEffect(() => {
+    scrapeProgressRef.current = scrapeProgress
+  }, [scrapeProgress])
+
+  // Memoize onSuccess callback to prevent infinite loops
+  const handlePollSuccess = useCallback((data: {
+    status: string
+    results: ScrapeResult[]
+    progress: number
+    error?: string
+    total_products: number
+  }) => {
+    // Guard: Don't process if jobId has changed (stale callback)
+    if (!jobIdRef.current) return
+
+    // Update results incrementally - merge new results with existing ones
+    if (data.results && Array.isArray(data.results)) {
+      setResults((prev) => {
+        let hasChanges = false
+        const newResults = [...prev]
+        // Update results that have changed (not pending anymore)
+        data.results.forEach((result, index) => {
+          if (result && result.status !== "pending") {
+            // Check if this result is different from the existing one
+            const existingResult = newResults[index]
+            if (!existingResult || 
+                existingResult.status !== result.status ||
+                existingResult.product !== result.product ||
+                existingResult.error !== result.error) {
+              newResults[index] = result
+              hasChanges = true
+            }
+          } else if (result && result.status === "pending" && index < newResults.length) {
+            // Keep existing result if it's already been processed
+            // Only update if current result is still pending
+            if (newResults[index].status === "pending") {
+              newResults[index] = result
+              hasChanges = true
+            }
+          } else if (index >= newResults.length) {
+            // Add new pending result if we don't have one yet
+            newResults.push(result)
+            hasChanges = true
+          }
+        })
+        // Only return new array if there were actual changes
+        return hasChanges ? newResults : prev
+      })
+    }
+
+    // Update progress only if it's different (avoid unnecessary updates)
+    if (data.progress !== scrapeProgressRef.current) {
+      setScrapeProgress(data.progress)
+    }
+
+    // Check if job is complete
+    if (data.status === "completed" || data.status === "failed") {
+      // Only update if we still have the same jobId
+      if (jobIdRef.current) {
+        setIsScraping(false)
+        setJobId(null)
+        jobIdRef.current = null
+        if (data.status === "completed") {
+          toast({
+            title: "Scraping completed",
+            description: `Successfully processed ${data.total_products} product(s)`,
+            variant: "default",
+          })
+        } else {
+          toast({
+            title: "Scraping failed",
+            description: data.error || "An error occurred during scraping",
+            variant: "destructive",
+          })
+        }
+      }
+    }
+  }, [toast])
+
+  // Memoize onError callback
+  const handlePollError = useCallback((err: Error) => {
+    toast({
+      title: "Polling error",
+      description: err.message,
+      variant: "destructive",
+    })
+    setIsScraping(false)
+    setJobId(null)
+  }, [toast])
+
+  // Memoize shouldStop callback
+  const shouldStopPolling = useCallback((data: {
+    status: string
+    results: ScrapeResult[]
+    progress: number
+    error?: string
+    total_products: number
+  }) => {
+    return data.status === "completed" || data.status === "failed"
+  }, [])
+
+  // Polling hook
+  const { data: jobStatus, error: pollingError } = usePolling<{
+    status: string
+    results: ScrapeResult[]
+    progress: number
+    error?: string
+    total_products: number
+  }>({
+    pollFn: pollJobStatus,
+    enabled: !!jobId && isScraping,
+    interval: 5000, // Poll every 5 seconds
+    onSuccess: handlePollSuccess,
+    onError: handlePollError,
+    shouldStop: shouldStopPolling,
+  })
+
   const handleStartScraping = async () => {
     if (!validateMapping()) return
     if (excelData.length === 0) {
@@ -420,6 +557,7 @@ export default function BulkUploadForm() {
     setIsScraping(true)
     setScrapeProgress(0)
     setResults([])
+    setJobId(null)
 
     // Map Excel data to product requests
     const products: MappedProduct[] = excelData.map((row) => {
@@ -450,11 +588,11 @@ export default function BulkUploadForm() {
     })
 
     // Filter out invalid products
-    const validProducts = products.filter(
+    const filteredValidProducts = products.filter(
       (p) => p.brand && (p.name || p.code)
     )
 
-    if (validProducts.length === 0) {
+    if (filteredValidProducts.length === 0) {
       toast({
         title: "No valid products",
         description: "No products found with valid name/code and brand",
@@ -464,8 +602,11 @@ export default function BulkUploadForm() {
       return
     }
 
+    // Store valid products for later use
+    setValidProducts(filteredValidProducts)
+
     // Process all products in batches (batch size is limited to 50)
-    const totalProducts = validProducts.length
+    const totalProducts = filteredValidProducts.length
     const estimatedBatches = Math.ceil(totalProducts / validBatchSize)
     
     toast({
@@ -475,7 +616,7 @@ export default function BulkUploadForm() {
     })
 
     // Initialize results with pending status for all products
-    const initialResults: ScrapeResult[] = validProducts.map((p) => ({
+    const initialResults: ScrapeResult[] = filteredValidProducts.map((p) => ({
       status: "pending",
       originalData: p,
     }))
@@ -488,7 +629,7 @@ export default function BulkUploadForm() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          products: validProducts,
+          products: filteredValidProducts,
           batchSize: validBatchSize,
           batchDelay,
         }),
@@ -500,11 +641,10 @@ export default function BulkUploadForm() {
       }
 
       const data = await response.json()
-      if (data.results && Array.isArray(data.results)) {
-        setResults(data.results)
-        setScrapeProgress(100)
+      if (data.job_id) {
+        setJobId(data.job_id)
       } else {
-        throw new Error("Invalid response format")
+        throw new Error("No job ID returned")
       }
     } catch (error) {
       console.error("Scraping error:", error)
@@ -525,9 +665,8 @@ export default function BulkUploadForm() {
             : r
         )
       )
-    } finally {
       setIsScraping(false)
-      setScrapeProgress(100)
+      setJobId(null)
     }
   }
 

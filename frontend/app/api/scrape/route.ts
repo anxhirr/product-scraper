@@ -134,11 +134,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Call backend API: /search/batch (using single product in batch format)
-    // Use code if provided, otherwise use name (code has priority)
-    const query = code || name || ""
-    const backendUrl = `${BACKEND_URL}/search/batch`
-
+    // Create async job on backend
+    const backendUrl = `${BACKEND_URL}/jobs`
     const response = await fetch(backendUrl, {
       method: "POST",
       headers: {
@@ -166,31 +163,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const backendResults: Array<{
-      product?: BackendProduct
-      error?: string
-      status: "success" | "error"
-    }> = await response.json()
+    const jobData: { job_id: string } = await response.json()
 
-    if (backendResults.length === 0 || backendResults[0].status !== "success" || !backendResults[0].product) {
-      const errorMsg = backendResults[0]?.error || "Failed to scrape product"
-      return NextResponse.json(
-        { error: errorMsg },
-        { status: 500 }
-      )
-    }
-
-    const backendProduct = backendResults[0].product
-
-    // Map backend Product to frontend ProductData and translate to Albanian
-    // Use provided code if available, otherwise use empty string (will fallback to sku from backend)
-    const productData = await mapProductToProductData(backendProduct, code || "")
-
-    return NextResponse.json(productData)
+    return NextResponse.json({ job_id: jobData.job_id })
   } catch (error) {
     console.error("Scraping error:", error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to scrape product data" },
+      { error: error instanceof Error ? error.message : "Failed to start scraping job" },
       { status: 500 }
     )
   }
