@@ -18,7 +18,7 @@ class ElRinconDeLosGeniosApiScraper(BaseScraper):
         """Not used for API-based scraping."""
         pass
     
-    def get_first_product_link(self, page: Page) -> str:
+    def get_first_product_link(self, page: Page, search_text: str) -> str:
         """Not used for API-based scraping."""
         return ""
     

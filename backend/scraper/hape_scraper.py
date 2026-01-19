@@ -21,7 +21,7 @@ class HapeScraper(BaseScraper):
         search_input.press("Enter")
         print(f"  ✓ Search submitted")
     
-    def get_first_product_link(self, page: Page) -> str:
+    def get_first_product_link(self, page: Page, search_text: str) -> str:
         """Extracts the first product link from Hape search results."""
         print(f"  → Looking for product links in search results...")
         first_product = page.locator('a[href*="/products/"]').first

@@ -68,7 +68,7 @@ class ElRinconDeLosGeniosScraper(BaseScraper):
         print(f"  → Waiting for search results to load...")
         page.wait_for_timeout(2000)  # Wait for search to complete
     
-    def get_first_product_link(self, page: Page) -> str:
+    def get_first_product_link(self, page: Page, search_text: str) -> str:
         """Extracts the first product link from search results (autocomplete suggestions)."""
         print(f"  → Looking for autocomplete suggestions...")
         

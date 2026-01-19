@@ -17,7 +17,7 @@ class BaseScraper(ABC):
         pass
     
     @abstractmethod
-    def get_first_product_link(self, page: Page) -> str:
+    def get_first_product_link(self, page: Page, search_text: str) -> str:
         """Extracts the URL of the first product from search results."""
         pass
     
@@ -43,7 +43,7 @@ class BaseScraper(ABC):
             self.perform_search(page, search_text)
             
             print(f"[Step 4/8] Waiting for search results...")
-            product_url = self.get_first_product_link(page)
+            product_url = self.get_first_product_link(page, search_text)
             
             print(f"[Step 5/8] Navigating to product page...")
             page.goto(product_url)
