@@ -47,6 +47,9 @@ class BatchSearchRequest(BaseModel):
     code: Optional[str] = None
     site: Optional[str] = None  # Made optional, brand takes priority
     brand: Optional[str] = None
+    category: Optional[str] = None
+    barcode: Optional[str] = None
+    price: Optional[str] = None
 
 
 class BatchSearchRequestBody(BaseModel):
@@ -59,12 +62,16 @@ class BatchSearchResponse(BaseModel):
     product: Optional[Product] = None
     error: Optional[str] = None
     status: str  # "success" or "error"
+    category: Optional[str] = None
+    barcode: Optional[str] = None
+    price: Optional[str] = None
 
 
 def scrape_single_product(request: BatchSearchRequest) -> BatchSearchResponse:
     """
     Helper function to scrape a single product, used in thread pool.
     Supports brand-based scraping with fallback to multiple sites.
+    Preserves Excel values for category, barcode, and price.
     """
     # Determine which sites to try
     sites_to_try: list[str] = []
@@ -74,20 +81,34 @@ def scrape_single_product(request: BatchSearchRequest) -> BatchSearchResponse:
         try:
             sites_to_try = get_sites_for_brand(request.brand)
         except ValueError as e:
-            return BatchSearchResponse(error=str(e), status="error")
+            return BatchSearchResponse(
+                error=str(e),
+                status="error",
+                category=request.category,
+                barcode=request.barcode,
+                price=request.price,
+            )
     elif request.site:
         # Fallback to direct site specification (backward compatibility)
         sites_to_try = [request.site]
     else:
         return BatchSearchResponse(
-            error="Either brand or site must be provided", status="error"
+            error="Either brand or site must be provided",
+            status="error",
+            category=request.category,
+            barcode=request.barcode,
+            price=request.price,
         )
     
     # Use code if provided, otherwise use name
     query = request.code if request.code else (request.name or "")
     if not query:
         return BatchSearchResponse(
-            error="Either name or code must be provided", status="error"
+            error="Either name or code must be provided",
+            status="error",
+            category=request.category,
+            barcode=request.barcode,
+            price=request.price,
         )
     
     # Try each site in order until one succeeds
@@ -96,7 +117,13 @@ def scrape_single_product(request: BatchSearchRequest) -> BatchSearchResponse:
         try:
             scraper = get_scraper(site)
             product = scraper.scrape_product(query)
-            return BatchSearchResponse(product=product, status="success")
+            return BatchSearchResponse(
+                product=product,
+                status="success",
+                category=request.category,
+                barcode=request.barcode,
+                price=request.price,
+            )
         except ValueError as e:
             # ValueError means site not found, but we should continue to next site
             last_error = str(e)
@@ -108,7 +135,13 @@ def scrape_single_product(request: BatchSearchRequest) -> BatchSearchResponse:
     
     # All sites failed
     error_msg = last_error or f"All sites failed for brand/site: {request.brand or request.site}"
-    return BatchSearchResponse(error=error_msg, status="error")
+    return BatchSearchResponse(
+        error=error_msg,
+        status="error",
+        category=request.category,
+        barcode=request.barcode,
+        price=request.price,
+    )
 
 
 @router.post("/search/batch", response_model=List[BatchSearchResponse])

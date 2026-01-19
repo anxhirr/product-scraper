@@ -17,11 +17,17 @@ interface ColumnMapperProps {
     name?: string
     code?: string
     brand?: string
+    category?: string
+    barcode?: string
+    price?: string
   }
   onMappingChange: (mapping: {
     name?: string
     code?: string
     brand?: string
+    category?: string
+    barcode?: string
+    price?: string
   }) => void
 }
 
@@ -30,7 +36,10 @@ export default function ColumnMapper({
   mapping,
   onMappingChange,
 }: ColumnMapperProps) {
-  const handleChange = (field: "name" | "code" | "brand", value: string) => {
+  const handleChange = (
+    field: "name" | "code" | "brand" | "category" | "barcode" | "price",
+    value: string
+  ) => {
     const newMapping = { ...mapping }
     if (value === "skip") {
       delete newMapping[field]
@@ -48,6 +57,9 @@ export default function ColumnMapper({
     name: !!mapping.name,
     code: !!mapping.code,
     brand: !!mapping.brand,
+    category: !!mapping.category,
+    barcode: !!mapping.barcode,
+    price: !!mapping.price,
   }
 
   return (
@@ -128,6 +140,81 @@ export default function ColumnMapper({
                 onValueChange={(value) => handleChange("brand", value)}
               >
                 <SelectTrigger id="map-brand">
+                  <SelectValue placeholder="Select column" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="skip">Skip</SelectItem>
+                  {columns.map((col) => (
+                    <SelectItem key={col} value={col}>
+                      {col}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="map-price">
+                Price
+                {autoDetectedFields.price && (
+                  <span className="text-xs text-muted-foreground ml-2">(auto-detected)</span>
+                )}
+              </Label>
+              <Select
+                value={mapping.price || "skip"}
+                onValueChange={(value) => handleChange("price", value)}
+              >
+                <SelectTrigger id="map-price">
+                  <SelectValue placeholder="Select column" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="skip">Skip</SelectItem>
+                  {columns.map((col) => (
+                    <SelectItem key={col} value={col}>
+                      {col}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="map-barcode">
+                Barcode
+                {autoDetectedFields.barcode && (
+                  <span className="text-xs text-muted-foreground ml-2">(auto-detected)</span>
+                )}
+              </Label>
+              <Select
+                value={mapping.barcode || "skip"}
+                onValueChange={(value) => handleChange("barcode", value)}
+              >
+                <SelectTrigger id="map-barcode">
+                  <SelectValue placeholder="Select column" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="skip">Skip</SelectItem>
+                  {columns.map((col) => (
+                    <SelectItem key={col} value={col}>
+                      {col}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="map-category">
+                Category
+                {autoDetectedFields.category && (
+                  <span className="text-xs text-muted-foreground ml-2">(auto-detected)</span>
+                )}
+              </Label>
+              <Select
+                value={mapping.category || "skip"}
+                onValueChange={(value) => handleChange("category", value)}
+              >
+                <SelectTrigger id="map-category">
                   <SelectValue placeholder="Select column" />
                 </SelectTrigger>
                 <SelectContent>

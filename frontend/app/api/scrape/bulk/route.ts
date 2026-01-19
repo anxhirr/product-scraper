@@ -7,6 +7,9 @@ interface BatchProductRequest {
   name?: string
   code?: string
   brand: string
+  category?: string
+  barcode?: string
+  price?: string
 }
 
 interface BatchRequest {
@@ -29,6 +32,9 @@ interface BackendBatchResponse {
   product?: BackendProduct
   error?: string
   status: "success" | "error"
+  category?: string
+  barcode?: string
+  price?: string
 }
 
 interface ProductData {
@@ -86,7 +92,10 @@ function parseSpecifications(specs: string): Record<string, string> {
 async function mapProductToProductData(
   backendProduct: BackendProduct,
   code: string,
-  brand?: string
+  brand?: string,
+  excelPrice?: string,
+  excelBarcode?: string,
+  excelCategory?: string
 ): Promise<ProductData> {
   // Parse specifications first
   const parsedSpecs = parseSpecifications(backendProduct.specifications)
@@ -124,16 +133,28 @@ async function mapProductToProductData(
     translateSpecs,
   ])
 
+  // Merge Excel values into specifications if provided
+  const finalSpecs: Record<string, string> = { ...translatedSpecs }
+  if (excelBarcode) {
+    finalSpecs["Barcode"] = excelBarcode
+  }
+  if (excelCategory) {
+    finalSpecs["Category"] = excelCategory
+  }
+
+  // Use Excel price if provided, otherwise use scraped price
+  const finalPrice = excelPrice || backendProduct.price
+
   return {
     name: translatedName || backendProduct.title,
     nameOriginal: backendProduct.title || undefined,
     code: backendProduct.sku || code, // Fallback to provided code if sku is empty
-    price: backendProduct.price,
+    price: finalPrice,
     brand: brand || undefined,
     description: translatedDescription,
     descriptionOriginal: backendProduct.description || undefined,
     specifications:
-      Object.keys(translatedSpecs).length > 0 ? translatedSpecs : undefined,
+      Object.keys(finalSpecs).length > 0 ? finalSpecs : undefined,
     specificationsOriginal:
       Object.keys(parsedSpecs).length > 0 ? parsedSpecs : undefined,
     images: backendProduct.images || [],
@@ -165,6 +186,9 @@ export async function POST(request: NextRequest) {
           name: p.name,
           code: p.code,
           brand: p.brand,
+          category: p.category,
+          barcode: p.barcode,
+          price: p.price,
         })),
         batch_size: batchSize,
         batch_delay: batchDelay,
@@ -196,10 +220,18 @@ export async function POST(request: NextRequest) {
 
         if (backendResult.status === "success" && backendResult.product) {
           try {
+            // Use preserved fields from backend response, fallback to original data
+            const excelPrice = backendResult.price || originalData.price
+            const excelBarcode = backendResult.barcode || originalData.barcode
+            const excelCategory = backendResult.category || originalData.category
+
             const productData = await mapProductToProductData(
               backendResult.product,
               originalData.code || "",
-              originalData.brand
+              originalData.brand,
+              excelPrice,
+              excelBarcode,
+              excelCategory
             )
             return {
               product: productData,

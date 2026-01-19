@@ -22,6 +22,9 @@ interface MappedProduct {
   name?: string
   code?: string
   brand: string
+  category?: string
+  barcode?: string
+  price?: string
 }
 
 interface ScrapeResult {
@@ -39,6 +42,9 @@ export default function BulkUploadForm() {
     name?: string
     code?: string
     brand?: string
+    category?: string
+    barcode?: string
+    price?: string
   }>({})
   const [batchSize, setBatchSize] = useState(20)
   const [batchDelay, setBatchDelay] = useState(1000)
@@ -53,6 +59,9 @@ export default function BulkUploadForm() {
       name?: string
       code?: string
       brand?: string
+      category?: string
+      barcode?: string
+      price?: string
     } = {}
 
     const normalizedColumns = columnNames.map((col) => col.toLowerCase().trim())
@@ -122,6 +131,52 @@ export default function BulkUploadForm() {
       /^marca$/i, // Alternative spelling
     ]
 
+    // Patterns for price (English and Albanian)
+    const pricePatterns = [
+      /^price$/i,
+      /^cost$/i,
+      /^amount$/i,
+      /^value$/i,
+      /^prize$/i,
+      /^pricing$/i,
+      // Albanian patterns
+      /^çmimi$/i,
+      /^cmimi$/i,
+      /^çmim$/i,
+      /^cmim$/i,
+      /^vlera$/i,
+    ]
+
+    // Patterns for barcode (English and Albanian)
+    const barcodePatterns = [
+      /^barcode$/i,
+      /^bar\s*code$/i,
+      /^ean$/i,
+      /^upc$/i,
+      /^gtin$/i,
+      /^product\s*code$/i,
+      // Albanian patterns
+      /^barkod$/i,
+      /^bar\s*kod$/i,
+      /^kodi\s*i\s*barkodit$/i,
+    ]
+
+    // Patterns for category (English and Albanian)
+    const categoryPatterns = [
+      /^category$/i,
+      /^cat$/i,
+      /^categories$/i,
+      /^type$/i,
+      /^product\s*type$/i,
+      /^product\s*category$/i,
+      // Albanian patterns
+      /^kategoria$/i,
+      /^kategori$/i,
+      /^kategoritë$/i,
+      /^lloji$/i,
+      /^lloji\s*i\s*produktit$/i,
+    ]
+
     // Find matches
     for (let i = 0; i < columnNames.length; i++) {
       const col = columnNames[i]
@@ -152,6 +207,36 @@ export default function BulkUploadForm() {
         for (const pattern of brandPatterns) {
           if (pattern.test(normalized)) {
             mapping.brand = col
+            break
+          }
+        }
+      }
+
+      // Check for price
+      if (!mapping.price) {
+        for (const pattern of pricePatterns) {
+          if (pattern.test(normalized)) {
+            mapping.price = col
+            break
+          }
+        }
+      }
+
+      // Check for barcode
+      if (!mapping.barcode) {
+        for (const pattern of barcodePatterns) {
+          if (pattern.test(normalized)) {
+            mapping.barcode = col
+            break
+          }
+        }
+      }
+
+      // Check for category
+      if (!mapping.category) {
+        for (const pattern of categoryPatterns) {
+          if (pattern.test(normalized)) {
+            mapping.category = col
             break
           }
         }
@@ -223,6 +308,9 @@ export default function BulkUploadForm() {
         if (autoMappings.name) detectedFields.push("Name")
         if (autoMappings.code) detectedFields.push("Code")
         if (autoMappings.brand) detectedFields.push("Brand")
+        if (autoMappings.price) detectedFields.push("Price")
+        if (autoMappings.barcode) detectedFields.push("Barcode")
+        if (autoMappings.category) detectedFields.push("Category")
 
         if (totalRows > MAX_ROWS) {
           toast({
@@ -253,6 +341,9 @@ export default function BulkUploadForm() {
     name?: string
     code?: string
     brand?: string
+    category?: string
+    barcode?: string
+    price?: string
   }) => {
     setColumnMapping(mapping)
   }
@@ -316,6 +407,15 @@ export default function BulkUploadForm() {
       }
       if (columnMapping.code && row[columnMapping.code]) {
         product.code = String(row[columnMapping.code]).trim()
+      }
+      if (columnMapping.price && row[columnMapping.price]) {
+        product.price = String(row[columnMapping.price]).trim()
+      }
+      if (columnMapping.barcode && row[columnMapping.barcode]) {
+        product.barcode = String(row[columnMapping.barcode]).trim()
+      }
+      if (columnMapping.category && row[columnMapping.category]) {
+        product.category = String(row[columnMapping.category]).trim()
       }
 
       return product

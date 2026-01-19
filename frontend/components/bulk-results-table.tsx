@@ -39,6 +39,9 @@ interface ScrapeResult {
     name?: string
     code?: string
     brand: string
+    category?: string
+    barcode?: string
+    price?: string
   }
 }
 
@@ -151,7 +154,8 @@ export default function BulkResultsTable({
     // Transform products to rows
     const rows = successfulResults.map((result) => {
       const product = result.product!
-      const barcode = getSpecValue(product.specifications, [
+      // Prioritize Excel values over scraped values
+      const barcode = result.originalData.barcode || getSpecValue(product.specifications, [
         "barcode",
         "Barcode",
         "BARCODE",
@@ -160,18 +164,19 @@ export default function BulkResultsTable({
         "upc",
         "UPC",
       ])
-      const category = getSpecValue(product.specifications, [
+      const category = result.originalData.category || getSpecValue(product.specifications, [
         "category",
         "Category",
         "CATEGORY",
         "category_name",
         "Category Name",
       ])
+      const price = result.originalData.price || product.price || ""
       return [
         product.name || "",
         product.code || "",
         barcode,
-        product.price || "",
+        price,
         product.brand || "",
         category,
         product.description || "",
@@ -290,9 +295,9 @@ export default function BulkResultsTable({
                     {result.product?.code || result.originalData.code || "-"}
                   </TableCell>
                   <TableCell>
-                    {result.product?.price ? (
+                    {result.originalData.price || result.product?.price ? (
                       <span className="font-semibold text-primary">
-                        {result.product.price}
+                        {result.originalData.price || result.product?.price}
                       </span>
                     ) : (
                       "-"
