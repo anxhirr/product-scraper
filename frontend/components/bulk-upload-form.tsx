@@ -322,15 +322,13 @@ export default function BulkUploadForm() {
           return
         }
 
-        // Limit to 50 rows maximum
-        const MAX_ROWS = 50
-        const limitedData = jsonData.slice(0, MAX_ROWS)
+        // Load all rows from Excel file
         const totalRows = jsonData.length
 
         // Extract column names
-        const columnNames = Object.keys(limitedData[0])
+        const columnNames = Object.keys(jsonData[0])
         setColumns(columnNames)
-        setExcelData(limitedData)
+        setExcelData(jsonData)
 
         // Auto-detect column mappings
         const autoMappings = autoDetectMappings(columnNames)
@@ -346,18 +344,10 @@ export default function BulkUploadForm() {
         if (autoMappings.category) detectedFields.push("Category")
         if (autoMappings.quantity) detectedFields.push("Quantity")
 
-        if (totalRows > MAX_ROWS) {
-          toast({
-            title: "File uploaded (limited)",
-            description: `Loaded ${MAX_ROWS} of ${totalRows} row(s). Maximum ${MAX_ROWS} rows allowed.${detectedFields.length > 0 ? ` Auto-detected: ${detectedFields.join(", ")}` : ""}`,
-            variant: "default",
-          })
-        } else {
-          toast({
-            title: "File uploaded",
-            description: `Loaded ${totalRows} row(s) with ${columnNames.length} column(s).${detectedFields.length > 0 ? ` Auto-detected: ${detectedFields.join(", ")}` : ""}`,
-          })
-        }
+        toast({
+          title: "File uploaded",
+          description: `Loaded ${totalRows} row(s) with ${columnNames.length} column(s). Products will be processed in batches of up to 50.${detectedFields.length > 0 ? ` Auto-detected: ${detectedFields.join(", ")}` : ""}`,
+        })
       } catch (error) {
         console.error("Error parsing Excel:", error)
         toast({
@@ -474,18 +464,17 @@ export default function BulkUploadForm() {
       return
     }
 
-    // Enforce maximum of 50 products
-    const MAX_PRODUCTS = 50
-    if (validProducts.length > MAX_PRODUCTS) {
-      toast({
-        title: "Too many products",
-        description: `Maximum ${MAX_PRODUCTS} products allowed. Only the first ${MAX_PRODUCTS} will be processed.`,
-        variant: "default",
-      })
-    }
-    const productsToProcess = validProducts.slice(0, MAX_PRODUCTS)
+    // Process all products in batches (batch size is limited to 50)
+    const totalProducts = validProducts.length
+    const estimatedBatches = Math.ceil(totalProducts / validBatchSize)
+    
+    toast({
+      title: "Starting bulk scrape",
+      description: `Processing ${totalProducts} product(s) in ${estimatedBatches} batch(es) of up to ${validBatchSize} products each.`,
+      variant: "default",
+    })
 
-    // Initialize results with pending status
+    // Initialize results with pending status for all products
     const initialResults: ScrapeResult[] = validProducts.map((p) => ({
       status: "pending",
       originalData: p,
