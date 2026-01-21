@@ -26,6 +26,7 @@ interface BackendProduct {
   description: string
   specifications: string
   images: string[]
+  primary_image: string
   url: string
 }
 
@@ -50,6 +51,7 @@ interface ProductData {
   specifications?: Record<string, string>
   specificationsOriginal?: Record<string, string>
   images?: string[]
+  primaryImage?: string
   sourceUrl?: string
 }
 
@@ -187,6 +189,7 @@ async function mapProductToProductData(
     specificationsOriginal:
       Object.keys(parsedSpecs).length > 0 ? parsedSpecs : undefined,
     images: backendProduct.images || [],
+    primaryImage: backendProduct.primary_image || "",
     sourceUrl: backendProduct.url,
   }
 }

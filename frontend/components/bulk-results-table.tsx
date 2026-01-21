@@ -203,6 +203,7 @@ export default function BulkResultsTable({
       "Description",
       "Specifications",
       "Images",
+      "Primary Image",
       "Source URL",
     ]
 
@@ -249,6 +250,7 @@ export default function BulkResultsTable({
           ? JSON.stringify(product.specifications)
           : "",
         product.images?.join(",") || "",
+        product.primaryImage || "",
         product.sourceUrl || "",
       ]
     })

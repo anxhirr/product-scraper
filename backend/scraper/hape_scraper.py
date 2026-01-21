@@ -127,12 +127,16 @@ class HapeScraper(BaseScraper):
         
         print(f"  ✓ Found {len(images)} image(s)")
         
+        # Set primary image as the first image (if images exist)
+        primary_image = images[0] if images else ""
+        
         return Product(
             title=title,
             price=price,
             description=description,
             specifications=specifications,
             images=images,
+            primary_image=primary_image,
             sku=sku,
             url=product_url
         )

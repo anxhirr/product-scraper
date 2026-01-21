@@ -158,12 +158,16 @@ class HapeGlobalScraper(BaseScraper):
                     seen_urls.add(clean_url)
                     images.append(clean_url)
         
+        # Set primary image as the first image (if images exist)
+        primary_image = images[0] if images else ""
+        
         product = Product(
             title=title,
             price=price,
             description=description,
             specifications=specifications,
             images=images,
+            primary_image=primary_image,
             sku=sku,
             url=product_url
         )

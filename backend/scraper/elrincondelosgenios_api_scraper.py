@@ -31,6 +31,7 @@ class ElRinconDeLosGeniosApiScraper(BaseScraper):
             description="",
             specifications="",
             images=[],
+            primary_image="",
             url=""
         )
     
@@ -151,6 +152,9 @@ class ElRinconDeLosGeniosApiScraper(BaseScraper):
                             images.append(self.clean_image_url(image_url))
                             break
         
+        # Set primary image as the first image (if images exist)
+        primary_image = images[0] if images else ""
+        
         # Ensure URL is absolute
         if url and not url.startswith("http"):
             url = f"https://elrincondelosgenios.com{url}" if url.startswith("/") else f"https://elrincondelosgenios.com/{url}"
@@ -162,6 +166,7 @@ class ElRinconDeLosGeniosApiScraper(BaseScraper):
             description=self.normalize_text(description) if description else "",
             specifications=specifications,
             images=images,
+            primary_image=primary_image,
             url=url or f"https://elrincondelosgenios.com/"
         )
     
@@ -212,6 +217,9 @@ class ElRinconDeLosGeniosApiScraper(BaseScraper):
         if img_elem and img_elem.get("data-src"):
             images.append(self.clean_image_url(img_elem["data-src"]))
         
+        # Set primary image as the first image (if images exist)
+        primary_image = images[0] if images else ""
+        
         return Product(
             title=title or f"Product: {search_text}",
             sku=sku or "N/A",
@@ -219,6 +227,7 @@ class ElRinconDeLosGeniosApiScraper(BaseScraper):
             description=self.normalize_text(description),
             specifications="",
             images=images,
+            primary_image=primary_image,
             url=url or f"https://elrincondelosgenios.com/"
         )
     

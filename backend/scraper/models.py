@@ -8,4 +8,5 @@ class Product(BaseModel):
     description: str
     specifications: str
     images: List[str]
+    primary_image: str
     url: str

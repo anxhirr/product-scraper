@@ -29,6 +29,7 @@ export interface ProductData {
   specifications?: Record<string, string>
   specificationsOriginal?: Record<string, string>
   images?: string[]
+  primaryImage?: string
   sourceUrl?: string
 }
 

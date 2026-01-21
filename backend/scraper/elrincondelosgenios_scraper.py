@@ -200,6 +200,9 @@ class ElRinconDeLosGeniosScraper(BaseScraper):
                 if images:
                     break
         
+        # Set primary image as the first image (if images exist)
+        primary_image = images[0] if images else ""
+        
         print(f"  ✓ Product extracted")
         return Product(
             title=title,
@@ -207,6 +210,7 @@ class ElRinconDeLosGeniosScraper(BaseScraper):
             description=description,
             specifications=specifications,
             images=images,
+            primary_image=primary_image,
             sku=sku,
             url=product_url
         )
