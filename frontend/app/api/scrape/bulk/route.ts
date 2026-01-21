@@ -69,21 +69,53 @@ function parseSpecifications(specs: string): Record<string, string> {
       return parsed
     }
   } catch {
-    // If not JSON, try parsing as key-value pairs (e.g., "key: value\nkey2: value2")
-    const lines = specs.split("\n").filter((line) => line.trim())
+    // If not JSON, try parsing as key-value pairs
     const result: Record<string, string> = {}
-    for (const line of lines) {
-      const colonIndex = line.indexOf(":")
-      if (colonIndex > 0) {
-        const key = line.substring(0, colonIndex).trim()
-        const value = line.substring(colonIndex + 1).trim()
+    
+    // First, try splitting by newlines (preferred format)
+    const lines = specs.split("\n").filter((line) => line.trim())
+    if (lines.length > 1) {
+      // Multiple lines - parse each line
+      for (const line of lines) {
+        const colonIndex = line.indexOf(":")
+        if (colonIndex > 0) {
+          const key = line.substring(0, colonIndex).trim()
+          const value = line.substring(colonIndex + 1).trim()
+          if (key && value) {
+            result[key] = value
+          }
+        }
+      }
+      if (Object.keys(result).length > 0) {
+        return result
+      }
+    } else {
+      // Single line - try to parse multiple key-value pairs on the same line
+      // Pattern: "Key: Value Key2: Value2 Key3: Value3"
+      // Split by finding patterns like " Key: " (space, text, colon, space) or start of string
+      const keyValuePattern = /(?:^|\s)([^:]+?):\s*([^:]+?)(?=\s+[^:]+:|$)/g
+      let match
+      while ((match = keyValuePattern.exec(specs)) !== null) {
+        const key = match[1].trim()
+        const value = match[2].trim()
         if (key && value) {
           result[key] = value
         }
       }
-    }
-    if (Object.keys(result).length > 0) {
-      return result
+      if (Object.keys(result).length > 0) {
+        return result
+      }
+      
+      // Fallback: try simple colon split for single key-value pair
+      const colonIndex = specs.indexOf(":")
+      if (colonIndex > 0) {
+        const key = specs.substring(0, colonIndex).trim()
+        const value = specs.substring(colonIndex + 1).trim()
+        if (key && value) {
+          result[key] = value
+          return result
+        }
+      }
     }
   }
   // If all else fails, return as a single key-value pair
@@ -136,17 +168,8 @@ async function mapProductToProductData(
     translateSpecs,
   ])
 
-  // Merge Excel values into specifications if provided
+  // Use translated specifications as-is (don't merge Excel barcode, category, quantity)
   const finalSpecs: Record<string, string> = { ...translatedSpecs }
-  if (excelBarcode) {
-    finalSpecs["Barcode"] = excelBarcode
-  }
-  if (excelCategory) {
-    finalSpecs["Category"] = excelCategory
-  }
-  if (excelQuantity) {
-    finalSpecs["Quantity"] = excelQuantity
-  }
 
   // Use Excel price if provided, otherwise use scraped price
   const finalPrice = excelPrice || backendProduct.price

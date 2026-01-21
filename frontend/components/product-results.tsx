@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { ExternalLinkIcon, ImageIcon, FileTextIcon, ListIcon, DollarSignIcon, CopyIcon, CheckIcon, DownloadIcon } from "lucide-react"
+import { ExternalLinkIcon, ImageIcon, FileTextIcon, ListIcon, CopyIcon, CheckIcon, DownloadIcon } from "lucide-react"
 import type { ProductData } from "./product-scraper-form"
 
 interface ProductResultsProps {
@@ -241,8 +241,11 @@ export default function ProductResults({ data }: ProductResultsProps) {
           </CardDescription>
           {data.price && (
             <div className="mt-3 flex items-center gap-2">
-              <DollarSignIcon className="w-5 h-5 text-primary" />
-              <span className="text-2xl font-bold text-primary">{data.price}</span>
+              <span className="text-2xl font-bold text-primary">
+                {data.price.includes("ALL") || data.price.includes("Lek") || data.price.includes("lek")
+                  ? data.price
+                  : `${data.price} ALL`}
+              </span>
             </div>
           )}
         </CardHeader>

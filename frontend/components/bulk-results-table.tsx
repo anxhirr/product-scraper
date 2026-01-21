@@ -26,6 +26,8 @@ import {
   ExternalLinkIcon,
   EyeIcon,
   DownloadIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import type { ProductData } from "./product-scraper-form"
@@ -57,17 +59,44 @@ export default function BulkResultsTable({
 }: BulkResultsTableProps) {
   const { toast } = useToast()
   const [selectedResult, setSelectedResult] = useState<ScrapeResult | null>(null)
+  const [selectedIndex, setSelectedIndex] = useState<number>(-1)
   const [isModalOpen, setIsModalOpen] = useState(false)
+
+  // Get all successful results for navigation
+  const successfulResults = results.filter((r) => r.status === "success" && r.product)
 
   const openModal = (result: ScrapeResult) => {
     setSelectedResult(result)
+    // Find the index of this result in the results array
+    const index = results.findIndex((r) => r === result)
+    setSelectedIndex(index)
     setIsModalOpen(true)
   }
 
   const closeModal = () => {
     setIsModalOpen(false)
     setSelectedResult(null)
+    setSelectedIndex(-1)
   }
+
+  const navigateToPrevious = () => {
+    if (selectedIndex > 0) {
+      const newIndex = selectedIndex - 1
+      setSelectedIndex(newIndex)
+      setSelectedResult(results[newIndex])
+    }
+  }
+
+  const navigateToNext = () => {
+    if (selectedIndex < results.length - 1) {
+      const newIndex = selectedIndex + 1
+      setSelectedIndex(newIndex)
+      setSelectedResult(results[newIndex])
+    }
+  }
+
+  const canNavigatePrevious = selectedIndex > 0
+  const canNavigateNext = selectedIndex < results.length - 1
 
   const successCount = results.filter((r) => r.status === "success").length
   const errorCount = results.filter((r) => r.status === "error").length
@@ -102,6 +131,30 @@ export default function BulkResultsTable({
   // Helper function to escape CSV values
   const escapeCsvValue = (value: string): string => {
     if (!value) return ""
+    // If value contains comma, quote, or newline, wrap in quotes and escape quotes
+    if (value.includes(",") || value.includes('"') || value.includes("\n")) {
+      return `"${value.replace(/"/g, '""')}"`
+    }
+    return value
+  }
+
+  // Helper function to format barcode for CSV (prevents Excel from converting to scientific notation)
+  // We preserve the original barcode value and quote it - no conversion needed
+  const formatBarcodeForCsv = (barcode: string): string => {
+    if (!barcode) return ""
+    // Just trim and return - the quoting in escapeCsvValueWithBarcode will handle Excel formatting
+    return barcode.trim()
+  }
+  
+  // Helper function to escape CSV values, with special handling for barcodes
+  const escapeCsvValueWithBarcode = (value: string, isBarcode: boolean = false): string => {
+    if (!value) return ""
+    
+    // Always quote barcodes to force Excel to treat as text
+    if (isBarcode) {
+      return `"${value.replace(/"/g, '""')}"`
+    }
+    
     // If value contains comma, quote, or newline, wrap in quotes and escape quotes
     if (value.includes(",") || value.includes('"') || value.includes("\n")) {
       return `"${value.replace(/"/g, '""')}"`
@@ -186,7 +239,7 @@ export default function BulkResultsTable({
       return [
         product.name || "",
         product.code || "",
-        barcode,
+        formatBarcodeForCsv(barcode),
         price,
         quantity,
         product.brand || "",
@@ -221,9 +274,18 @@ export default function BulkResultsTable({
     // Add headers
     csvRows.push(exportData.headers.map(escapeCsvValue).join(","))
 
-    // Add data rows
+    // Add data rows - barcode is at index 2 (Name=0, Code=1, Barcode=2)
+    const BARCODE_INDEX = 2
     exportData.rows.forEach((row) => {
-      csvRows.push(row.map((cell) => escapeCsvValue(String(cell))).join(","))
+      csvRows.push(
+        row
+          .map((cell, index) =>
+            index === BARCODE_INDEX
+              ? escapeCsvValueWithBarcode(String(cell), true)
+              : escapeCsvValue(String(cell))
+          )
+          .join(",")
+      )
     })
 
     const csvContent = csvRows.join("\n")
@@ -309,7 +371,12 @@ export default function BulkResultsTable({
                   <TableCell>
                     {result.originalData.price || result.product?.price ? (
                       <span className="font-semibold text-primary">
-                        {result.originalData.price || result.product?.price}
+                        {(() => {
+                          const price = result.originalData.price || result.product?.price || ""
+                          return price.includes("ALL") || price.includes("Lek") || price.includes("lek")
+                            ? price
+                            : `${price} ALL`
+                        })()}
                       </span>
                     ) : (
                       "-"
@@ -374,18 +441,49 @@ export default function BulkResultsTable({
       <Sheet open={isModalOpen} onOpenChange={setIsModalOpen}>
         <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto p-6">
           <SheetHeader className="pb-4">
-            <SheetTitle>
-              {selectedResult?.status === "success" && selectedResult?.product
-                ? selectedResult.product.name ||
-                  selectedResult.product.nameOriginal ||
-                  "Product Details"
-                : "Error Details"}
-            </SheetTitle>
-            <SheetDescription>
-              {selectedResult?.status === "success"
-                ? "View full product information"
-                : "View error information"}
-            </SheetDescription>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <SheetTitle>
+                  {selectedResult?.status === "success" && selectedResult?.product
+                    ? selectedResult.product.name ||
+                      selectedResult.product.nameOriginal ||
+                      "Product Details"
+                    : "Error Details"}
+                </SheetTitle>
+                <SheetDescription>
+                  {selectedResult?.status === "success"
+                    ? "View full product information"
+                    : "View error information"}
+                </SheetDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={navigateToPrevious}
+                  disabled={!canNavigatePrevious}
+                  className="shrink-0"
+                >
+                  <ChevronLeftIcon className="w-4 h-4" />
+                  <span className="sr-only">Previous product</span>
+                </Button>
+                <div className="text-sm text-muted-foreground min-w-[60px] text-center">
+                  {selectedIndex >= 0 && results.length > 0
+                    ? `${selectedIndex + 1} / ${results.length}`
+                    : ""}
+                </div>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={navigateToNext}
+                  disabled={!canNavigateNext}
+                  className="shrink-0"
+                >
+                  <ChevronRightIcon className="w-4 h-4" />
+                  <span className="sr-only">Next product</span>
+                </Button>
+              </div>
+            </div>
           </SheetHeader>
 
           <div className="px-2">

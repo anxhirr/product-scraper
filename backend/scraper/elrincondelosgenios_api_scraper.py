@@ -39,7 +39,7 @@ class ElRinconDeLosGeniosApiScraper(BaseScraper):
         Main scraping method that calls the API and extracts product data.
         Overrides the base class method to use API calls instead of browser automation.
         """
-        print(f"[Step 1/3] Calling search API for '{search_text}'...")
+        print(f"Scraping '{search_text}' via API...")
         
         # Prepare form data
         form_data = {
@@ -61,11 +61,8 @@ class ElRinconDeLosGeniosApiScraper(BaseScraper):
                 timeout=30
             )
             response.raise_for_status()
-            print(f"  ✓ API request successful (status: {response.status_code})")
         except requests.exceptions.RequestException as e:
             raise Exception(f"API request failed: {str(e)}")
-        
-        print(f"[Step 2/3] Parsing API response...")
         
         # Try to parse as JSON first
         try:
@@ -73,10 +70,9 @@ class ElRinconDeLosGeniosApiScraper(BaseScraper):
             product = self._parse_json_response(data, search_text)
         except ValueError:
             # If not JSON, try parsing as HTML
-            print(f"  → Response is not JSON, trying HTML parsing...")
             product = self._parse_html_response(response.text, search_text)
         
-        print(f"[Step 3/3] ✓ Product data extracted successfully!")
+        print(f"✓ Scraping completed")
         return product
     
     def _parse_json_response(self, data: Any, search_text: str) -> Product:

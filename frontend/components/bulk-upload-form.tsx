@@ -49,7 +49,7 @@ export default function BulkUploadForm() {
     price?: string
     quantity?: string
   }>({})
-  const [batchSize, setBatchSize] = useState(20)
+  const [batchSize, setBatchSize] = useState(50)
   const [batchDelay, setBatchDelay] = useState(1000)
   const [isScraping, setIsScraping] = useState(false)
   const [scrapeProgress, setScrapeProgress] = useState(0)
@@ -311,9 +311,32 @@ export default function BulkUploadForm() {
         const workbook = XLSX.read(data, { type: "binary" })
         const firstSheetName = workbook.SheetNames[0]
         const worksheet = workbook.Sheets[firstSheetName]
+        // Use raw: true to preserve cell values, then format barcodes as text
         const jsonData: ExcelRow[] = XLSX.utils.sheet_to_json(worksheet, {
-          raw: false,
+          raw: true,
           defval: null,
+        })
+        
+        // Helper function to convert number to string without scientific notation
+        const numberToString = (num: number): string => {
+          if (num % 1 === 0) {
+            // Integer - use BigInt for precision with large numbers
+            return BigInt(num).toString()
+          }
+          // Float - convert normally
+          return String(num)
+        }
+        
+        // Convert numeric barcodes to full string representation (no scientific notation)
+        // This handles cases where Excel stores barcodes as numbers
+        jsonData.forEach((row) => {
+          Object.keys(row).forEach((key) => {
+            const value = row[key]
+            if (typeof value === 'number') {
+              // Convert numbers to string without scientific notation
+              row[key] = numberToString(value)
+            }
+          })
         })
 
         if (jsonData.length === 0) {
@@ -544,7 +567,7 @@ export default function BulkUploadForm() {
     }
 
     // Validate batch size
-    const validBatchSize = Math.max(1, Math.min(50, batchSize || 20))
+    const validBatchSize = Math.max(1, Math.min(50, batchSize || 50))
     if (batchSize !== validBatchSize) {
       setBatchSize(validBatchSize)
       toast({
@@ -752,14 +775,14 @@ export default function BulkUploadForm() {
                       setBatchSize(clampedValue)
                     } else if (e.target.value === "") {
                       // Reset to default if empty
-                      setBatchSize(20)
+                      setBatchSize(50)
                     }
                   }}
                   onBlur={(e) => {
                     // Ensure valid value on blur
                     const value = parseInt(e.target.value)
                     if (isNaN(value) || value < 1 || value > 50) {
-                      setBatchSize(20)
+                      setBatchSize(50)
                     }
                   }}
                 />

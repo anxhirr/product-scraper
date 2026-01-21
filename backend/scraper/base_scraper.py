@@ -31,34 +31,27 @@ class BaseScraper(ABC):
         Main scraping method that orchestrates the entire scraping flow.
         This method handles browser setup/teardown and calls the abstract methods.
         """
-        print(f"[Step 1/8] Launching browser...")
+        print(f"Scraping '{search_text}'...")
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
             
-            print(f"[Step 2/8] Navigating to {self.get_base_url()}...")
             page.goto(self.get_base_url(), wait_until="load")
             
-            print(f"[Step 3/8] Searching for '{search_text}'...")
             self.perform_search(page, search_text)
             
-            print(f"[Step 4/8] Waiting for search results...")
             product_url = self.get_first_product_link(page, search_text)
             
-            print(f"[Step 5/8] Navigating to product page...")
             page.goto(product_url)
             
-            print(f"[Step 6/8] Waiting for product details to load...")
             # Note: Waiting for specific elements is handled in extract_product_data
             # This matches the original implementation pattern
             
-            print(f"[Step 7/8] Extracting product data...")
             product = self.extract_product_data(page, product_url)
             
-            print(f"[Step 8/8] Closing browser...")
             browser.close()
             
-            print(f"✓ Scraping completed successfully!")
+            print(f"✓ Scraping completed")
             return product
     
     @staticmethod
