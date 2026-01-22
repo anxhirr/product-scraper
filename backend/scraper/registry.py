@@ -3,6 +3,7 @@ from scraper.base_scraper import BaseScraper
 from scraper.hape_global_scraper import HapeGlobalScraper
 from scraper.liewood_scraper import LiewoodScraper
 from scraper.rockahula_scraper import RockahulaScraper
+from scraper.donebydeer_scraper import DoneByDeerScraper
 
 
 # Registry mapping site identifiers to scraper classes
@@ -12,6 +13,7 @@ SCRAPER_REGISTRY = {
     "hape_global": HapeGlobalScraper,
     "liewood": LiewoodScraper,
     "rockahula": RockahulaScraper,
+    "donebydeer": DoneByDeerScraper,
 }
 
 # Brand to sites mapping (ordered list: primary, fallback, etc.)
@@ -19,6 +21,8 @@ BRAND_TO_SITES_MAP = {
     "hape": ["hape", "hape_global"],
     "liewood": ["liewood"],
     "rockahula": ["rockahula"],
+    "done_by_deer": ["donebydeer"],
+    "done by deer": ["donebydeer"],  # Alias with spaces for user-friendly access
 }
 
 
@@ -57,7 +61,7 @@ def get_sites_for_brand(brand: str) -> list[str]:
     The list is ordered by priority (primary, fallback, etc.).
     
     Args:
-        brand: Brand identifier (e.g., "hape", "liewood")
+        brand: Brand identifier (e.g., "hape", "liewood", "Done by Deer")
     
     Returns:
         Ordered list of site identifiers for the brand
@@ -65,14 +69,24 @@ def get_sites_for_brand(brand: str) -> list[str]:
     Raises:
         ValueError: If the brand identifier is not found in the mapping
     """
-    brand_lower = brand.lower()
-    if brand_lower not in BRAND_TO_SITES_MAP:
-        available_brands = ", ".join(BRAND_TO_SITES_MAP.keys())
-        raise ValueError(
-            f"Unknown brand: '{brand}'. Available brands: {available_brands}"
-        )
+    brand_lower = brand.lower().strip()
+    # Normalize spaces to underscores for brand matching
+    # e.g., "done by deer" -> "done_by_deer"
+    brand_normalized = brand_lower.replace(" ", "_")
     
-    return BRAND_TO_SITES_MAP[brand_lower]
+    # Try exact match first
+    if brand_lower in BRAND_TO_SITES_MAP:
+        return BRAND_TO_SITES_MAP[brand_lower]
+    
+    # Try normalized version (spaces to underscores)
+    if brand_normalized in BRAND_TO_SITES_MAP:
+        return BRAND_TO_SITES_MAP[brand_normalized]
+    
+    # If still not found, show available brands
+    available_brands = ", ".join(BRAND_TO_SITES_MAP.keys())
+    raise ValueError(
+        f"Unknown brand: '{brand}'. Available brands: {available_brands}"
+    )
 
 
 def get_available_brands() -> list[str]:
