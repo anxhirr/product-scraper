@@ -33,8 +33,6 @@ export interface ProductData {
   sourceUrl?: string
 }
 
-const STORAGE_KEY = "product-scraper-selected-brand"
-
 export default function ProductScraperForm() {
   const [formData, setFormData] = useState({
     name: "",
@@ -46,23 +44,7 @@ export default function ProductScraperForm() {
   const [loading, setLoading] = useState(false)
   const [results, setResults] = useState<ProductData | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [isMounted, setIsMounted] = useState(false)
   const [jobId, setJobId] = useState<string | null>(null)
-
-  // Mark component as mounted (client-side only)
-  useEffect(() => {
-    setIsMounted(true)
-  }, [])
-
-  // Save brand to localStorage whenever it changes (but not on initial mount)
-  useEffect(() => {
-    if (isMounted && formData.brand && brands.length > 0) {
-      // Only save if the brand is actually in the available brands list
-      if (brands.includes(formData.brand)) {
-        localStorage.setItem(STORAGE_KEY, formData.brand)
-      }
-    }
-  }, [formData.brand, brands, isMounted])
 
   // Fetch available brands on component mount
   useEffect(() => {
@@ -75,15 +57,9 @@ export default function ProductScraperForm() {
         const brandsData = await response.json()
         setBrands(brandsData)
         
-        // Restore saved brand if it's still valid, otherwise use first brand
+        // Set first brand as default (user must select each time)
         if (brandsData.length > 0) {
-          const savedBrand = isMounted ? localStorage.getItem(STORAGE_KEY) : null
-          const brandToUse = savedBrand && brandsData.includes(savedBrand) 
-            ? savedBrand 
-            : brandsData[0]
-          
-          // Always set the brand after fetching (this ensures it's set even if initial state was empty)
-          setFormData((prev) => ({ ...prev, brand: brandToUse }))
+          setFormData((prev) => ({ ...prev, brand: brandsData[0] }))
         }
       } catch (err) {
         console.error("Error fetching brands:", err)
@@ -94,7 +70,7 @@ export default function ProductScraperForm() {
     }
 
     fetchBrands()
-  }, [isMounted])
+  }, [])
 
   // Polling function for job status
   const pollJobStatus = useCallback(async () => {
