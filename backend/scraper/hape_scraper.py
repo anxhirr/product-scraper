@@ -9,7 +9,7 @@ class HapeScraper(BaseScraper):
     def get_base_url(self) -> str:
         return "https://toys.hape.com/"
     
-    def perform_search(self, page: Page, search_text: str) -> None:
+    def perform_search(self, page: Page, search_text: str, navigation_delay: float = 0) -> None:
         """Performs search on Hape website."""
         print(f"  → Looking for search input...")
         search_input = page.locator("input[type='search']")

@@ -1,6 +1,7 @@
 from playwright.sync_api import Page
 from urllib.parse import quote_plus
 import json
+import time
 from bs4 import BeautifulSoup
 from scraper.base_scraper import BaseScraper
 from scraper.models import Product
@@ -12,7 +13,7 @@ class LiewoodScraper(BaseScraper):
     def get_base_url(self) -> str:
         return "https://www.liewood.com/"
     
-    def perform_search(self, page: Page, search_text: str) -> None:
+    def perform_search(self, page: Page, search_text: str, navigation_delay: float = 0) -> None:
         """Performs search on Liewood website by navigating to search URL."""
         print(f"  Searching for '{search_text}'...")
         
@@ -24,11 +25,33 @@ class LiewoodScraper(BaseScraper):
         # as the page may have continuous network activity
         page.goto(search_url, wait_until="load", timeout=30000)
         
+        # Add delay after navigation if specified
+        if navigation_delay > 0:
+            time.sleep(navigation_delay)
+        
         # Wait for the page to be ready
         page.wait_for_load_state("domcontentloaded")
         
-        # Wait a bit more for dynamic content to load
-        page.wait_for_timeout(3000)
+        # Wait for search result panel or product list to appear (element-based wait)
+        # This replaces the fixed 5000ms timeout with a more efficient element-based wait
+        try:
+            # Try waiting for search-result-panel first (more specific)
+            search_panel = page.locator("search-result-panel#main-search-results-product, search-result-panel")
+            search_panel.first.wait_for(state="visible", timeout=15000)
+        except Exception:
+            # Fallback to product-list
+            try:
+                product_list = page.locator("product-list")
+                product_list.wait_for(state="visible", timeout=15000)
+            except Exception:
+                pass  # Continue even if elements not found immediately
+        
+        # Wait for network to be idle (search results might be loading via API calls)
+        # Reduced timeout since we already waited for elements
+        try:
+            page.wait_for_load_state("networkidle", timeout=5000)
+        except:
+            pass  # Continue even if networkidle times out
         
         print(f"  ✓ Search completed")
     
@@ -53,9 +76,6 @@ class LiewoodScraper(BaseScraper):
         except Exception:
             pass
         
-        # Additional wait for dynamic content
-        page.wait_for_timeout(2000)
-        
         # Wait for product cards to appear - try multiple selectors
         product_card = None
         card_selectors = [
@@ -68,28 +88,55 @@ class LiewoodScraper(BaseScraper):
         for selector in card_selectors:
             try:
                 cards = page.locator(selector)
-                card_count = cards.count()
-                if card_count > 0:
+                if cards.count() > 0:
                     product_card = cards.first
                     product_card.wait_for(state="visible", timeout=10000)
-                    # Double check cards are still there
                     if cards.count() > 0:
                         break
             except Exception:
                 continue
         
-        if product_card is None or product_card.count() == 0:
-            # Try one more time with a longer wait
-            page.wait_for_timeout(3000)
-            all_cards = page.locator("product-card")
-            card_count = all_cards.count()
-            if card_count == 0:
-                # Check if page shows "no results" message
-                page_text = page.inner_text()
-                if "0 result" in page_text.lower() or "no result" in page_text.lower():
-                    raise Exception(f"No products found for search: '{search_text}'")
-                raise Exception(f"No product cards found in search results. Page may still be loading or search returned no results.")
-            product_card = all_cards.first
+        # If still no cards found, try one more time with a brief wait
+        if product_card is None:
+            try:
+                all_cards = page.locator("product-card")
+                all_cards.first.wait_for(state="visible", timeout=5000)
+                if all_cards.count() > 0:
+                    product_card = all_cards.first
+            except Exception:
+                pass
+        
+        # Consolidated "no results" check - only check once after waiting for cards
+        # Cache page text to avoid multiple calls
+        if product_card is None:
+            page_text = page.locator("body").inner_text()
+            has_no_results = (
+                "0 result" in page_text.lower() or 
+                "no result" in page_text.lower() or
+                "did not yield any result" in page_text.lower() or
+                "your search did not yield" in page_text.lower()
+            )
+            
+            # If we see "no results", wait briefly and re-check once
+            if has_no_results:
+                page.wait_for_timeout(1000)  # Reduced from 3000ms
+                # Re-check after brief wait
+                page_text = page.locator("body").inner_text()
+                has_no_results = (
+                    "0 result" in page_text.lower() or 
+                    "no result" in page_text.lower() or
+                    "did not yield any result" in page_text.lower() or
+                    "your search did not yield" in page_text.lower()
+                )
+            
+            # If search has no results, fail immediately - don't use popular products
+            if has_no_results:
+                raise Exception(f"No products found for search: '{search_text}'. The search returned no results.")
+            
+            # Final check - verify no results message
+            if "0 result" in page_text.lower() or "no result" in page_text.lower():
+                raise Exception(f"No products found for search: '{search_text}'")
+            raise Exception(f"No product cards found in search results. Page may still be loading or search returned no results.")
         
         # Find the product link - try multiple selectors
         link_selectors = [
@@ -115,13 +162,15 @@ class LiewoodScraper(BaseScraper):
             raise Exception("Could not find product link in first product card")
         
         # Wait for the link to have an href attribute (might be set dynamically)
-        max_retries = 5
-        href = None
-        for i in range(max_retries):
-            page.wait_for_timeout(500)
+        # Use element-based wait: wait for element to be attached, then check href
+        # If href is not immediately available, use a brief efficient wait
+        product_link.wait_for(state="attached", timeout=5000)
+        href = product_link.get_attribute("href")
+        
+        # If href is still not available, wait briefly and check again (max 2 attempts)
+        if not href:
+            page.wait_for_timeout(500)  # Brief wait for dynamic content
             href = product_link.get_attribute("href")
-            if href:
-                break
         
         if not href:
             raise Exception("Product link has no href attribute after waiting")

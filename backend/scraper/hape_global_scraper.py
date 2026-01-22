@@ -9,7 +9,7 @@ class HapeGlobalScraper(BaseScraper):
     def get_base_url(self) -> str:
         return "https://global.hape.com/"
     
-    def perform_search(self, page: Page, search_text: str) -> None:
+    def perform_search(self, page: Page, search_text: str, navigation_delay: float = 0) -> None:
         """Performs search on Hape website."""
         print(f"  Searching for '{search_text}'...")
         search_button = page.locator("button.header-action-search").first

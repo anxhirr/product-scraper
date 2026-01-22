@@ -58,8 +58,9 @@ class BatchSearchRequest(BaseModel):
 
 class BatchSearchRequestBody(BaseModel):
     products: List[BatchSearchRequest]
-    batch_size: int = 50
+    batch_size: int = 200
     batch_delay: int = 1000  # milliseconds
+    navigation_delay: int = 500  # milliseconds
 
 
 class BatchSearchResponse(BaseModel):
@@ -72,7 +73,7 @@ class BatchSearchResponse(BaseModel):
     quantity: Optional[str] = None
 
 
-def scrape_single_product(request: BatchSearchRequest) -> BatchSearchResponse:
+def scrape_single_product(request: BatchSearchRequest, navigation_delay: float = 0) -> BatchSearchResponse:
     """
     Helper function to scrape a single product, used in thread pool.
     Supports brand-based scraping with fallback to multiple sites.
@@ -107,24 +108,71 @@ def scrape_single_product(request: BatchSearchRequest) -> BatchSearchResponse:
             quantity=request.quantity,
         )
     
-    # Use code if provided, otherwise use name
-    query = request.code if request.code else (request.name or "")
-    if not query:
-        return BatchSearchResponse(
-            error="Either name or code must be provided",
-            status="error",
-            category=request.category,
-            barcode=request.barcode,
-            price=request.price,
-            quantity=request.quantity,
-        )
+    # Determine query based on brand/site requirements
+    # Liewood only searches by name, not by code
+    is_liewood = (
+        (request.brand and request.brand.lower() == "liewood") or
+        (request.site and request.site.lower() == "liewood") or
+        (sites_to_try and sites_to_try[0].lower() == "liewood")
+    )
+    
+    if is_liewood:
+        query = request.name or ""
+        if not query:
+            return BatchSearchResponse(
+                error="Name must be provided for liewood brand",
+                status="error",
+                category=request.category,
+                barcode=request.barcode,
+                price=request.price,
+                quantity=request.quantity,
+            )
+    else:
+        # Use code if provided, otherwise use name
+        query = request.code if request.code else (request.name or "")
+        if not query:
+            return BatchSearchResponse(
+                error="Either name or code must be provided",
+                status="error",
+                category=request.category,
+                barcode=request.barcode,
+                price=request.price,
+                quantity=request.quantity,
+            )
     
     # Try each site in order until one succeeds
     last_error: Optional[str] = None
     for site in sites_to_try:
         try:
             scraper = get_scraper(site)
-            product = scraper.scrape_product(query)
+            product = scraper.scrape_product(query, navigation_delay)
+            
+            # SKU validation for LieWood brand
+            if is_liewood and request.code:
+                excel_sku = request.code.strip()
+                extracted_sku = product.sku.strip() if product.sku else ""
+                
+                if not excel_sku or not extracted_sku:
+                    return BatchSearchResponse(
+                        error=f"SKU validation failed: missing SKU data (Excel: '{excel_sku}', Extracted: '{extracted_sku}')",
+                        status="error",
+                        category=request.category,
+                        barcode=request.barcode,
+                        price=request.price,
+                        quantity=request.quantity,
+                    )
+                
+                # Case-insensitive check: extracted SKU should contain Excel SKU
+                if excel_sku.lower() not in extracted_sku.lower():
+                    return BatchSearchResponse(
+                        error=f"SKU validation failed: extracted SKU '{extracted_sku}' does not contain Excel SKU '{excel_sku}'",
+                        status="error",
+                        category=request.category,
+                        barcode=request.barcode,
+                        price=request.price,
+                        quantity=request.quantity,
+                    )
+            
             return BatchSearchResponse(
                 product=product,
                 status="success",
@@ -176,20 +224,33 @@ def batch_search(body: BatchSearchRequestBody):
                 status_code=400,
                 detail=f"Product {i + 1}: either brand or site must be provided",
             )
-        if not req.name and not req.code:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Product {i + 1}: either name or code must be provided",
-            )
+        # Check if this is liewood - requires name only
+        is_liewood = (
+            (req.brand and req.brand.lower() == "liewood") or
+            (req.site and req.site.lower() == "liewood")
+        )
+        if is_liewood:
+            if not req.name:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Product {i + 1}: name must be provided for liewood brand",
+                )
+        else:
+            if not req.name and not req.code:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Product {i + 1}: either name or code must be provided",
+                )
 
     # Use provided config or defaults
     batch_size = body.batch_size
     batch_delay = body.batch_delay / 1000.0  # Convert to seconds
+    navigation_delay = body.navigation_delay / 1000.0  # Convert to seconds
 
     # Validate batch size
-    if batch_size < 1 or batch_size > 50:
+    if batch_size < 1 or batch_size > 500:
         raise HTTPException(
-            status_code=400, detail="Batch size must be between 1 and 50"
+            status_code=400, detail="Batch size must be between 1 and 500"
         )
 
     results: List[BatchSearchResponse] = []
@@ -205,7 +266,7 @@ def batch_search(body: BatchSearchRequestBody):
         with ThreadPoolExecutor(max_workers=batch_size) as executor:
             # Submit all tasks in the batch
             future_to_index = {
-                executor.submit(scrape_single_product, product): i
+                executor.submit(scrape_single_product, product, navigation_delay): i
                 for i, product in enumerate(batch)
             }
 
@@ -254,6 +315,7 @@ def process_job_async(job_id: str, body: BatchSearchRequestBody):
     products = body.products
     batch_size = body.batch_size
     batch_delay = body.batch_delay / 1000.0  # Convert to seconds
+    navigation_delay = body.navigation_delay / 1000.0  # Convert to seconds
     
     job.update_status(JobStatus.IN_PROGRESS)
     
@@ -269,7 +331,7 @@ def process_job_async(job_id: str, body: BatchSearchRequestBody):
             with ThreadPoolExecutor(max_workers=batch_size) as executor:
                 # Submit all tasks in the batch
                 future_to_index = {
-                    executor.submit(scrape_single_product, product): i
+                    executor.submit(scrape_single_product, product, navigation_delay): i
                     for i, product in enumerate(batch)
                 }
                 
@@ -322,16 +384,28 @@ def create_job(body: BatchSearchRequestBody):
                 status_code=400,
                 detail=f"Product {i + 1}: either brand or site must be provided",
             )
-        if not req.name and not req.code:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Product {i + 1}: either name or code must be provided",
-            )
+        # Check if this is liewood - requires name only
+        is_liewood = (
+            (req.brand and req.brand.lower() == "liewood") or
+            (req.site and req.site.lower() == "liewood")
+        )
+        if is_liewood:
+            if not req.name:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Product {i + 1}: name must be provided for liewood brand",
+                )
+        else:
+            if not req.name and not req.code:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Product {i + 1}: either name or code must be provided",
+                )
     
     # Validate batch size
-    if body.batch_size < 1 or body.batch_size > 50:
+    if body.batch_size < 1 or body.batch_size > 500:
         raise HTTPException(
-            status_code=400, detail="Batch size must be between 1 and 50"
+            status_code=400, detail="Batch size must be between 1 and 500"
         )
     
     # Generate job ID

@@ -28,7 +28,9 @@ import {
   DownloadIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  RotateCwIcon,
 } from "lucide-react"
+import { Spinner } from "@/components/ui/spinner"
 import { useToast } from "@/hooks/use-toast"
 import type { ProductData } from "./product-scraper-form"
 import ProductResults from "./product-results"
@@ -56,11 +58,19 @@ interface ScrapeResult {
 interface BulkResultsTableProps {
   results: ScrapeResult[]
   isScraping: boolean
+  onRetryOne?: (index: number) => void
+  onRetryAll?: () => void
+  isRetryingAll?: boolean
+  retryingIndices?: Set<number>
 }
 
 export default function BulkResultsTable({
   results,
   isScraping,
+  onRetryOne,
+  onRetryAll,
+  isRetryingAll = false,
+  retryingIndices = new Set(),
 }: BulkResultsTableProps) {
   const { toast } = useToast()
   const [selectedResult, setSelectedResult] = useState<ScrapeResult | null>(null)
@@ -398,15 +408,38 @@ export default function BulkResultsTable({
             </CardDescription>
           </div>
           {results.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={exportToCsv}
-              className="gap-2"
-            >
-              <DownloadIcon className="w-4 h-4" />
-              Export to CSV
-            </Button>
+            <div className="flex items-center gap-2">
+              {errorCount > 0 && onRetryAll && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onRetryAll}
+                  disabled={isScraping || isRetryingAll || retryingIndices.size > 0}
+                  className="gap-2"
+                >
+                  {isRetryingAll ? (
+                    <>
+                      <Spinner className="w-3 h-3" />
+                      Retrying…
+                    </>
+                  ) : (
+                    <>
+                      <RotateCwIcon className="w-3 h-3" />
+                      Retry all errors
+                    </>
+                  )}
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportToCsv}
+                className="gap-2"
+              >
+                <DownloadIcon className="w-4 h-4" />
+                Export to CSV
+              </Button>
+            </div>
           )}
         </div>
       </CardHeader>
@@ -415,6 +448,7 @@ export default function BulkResultsTable({
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">#</TableHead>
                 <TableHead>Original Name</TableHead>
                 <TableHead>Original Code</TableHead>
                 <TableHead>Original Price</TableHead>
@@ -429,6 +463,9 @@ export default function BulkResultsTable({
             <TableBody>
               {results.map((result, index) => (
                 <TableRow key={index}>
+                  <TableCell className="text-muted-foreground font-medium">
+                    {index + 1}
+                  </TableCell>
                   <TableCell className="font-medium">
                     {result.originalData.name || "-"}
                   </TableCell>
@@ -501,6 +538,33 @@ export default function BulkResultsTable({
                           View Error
                         </Button>
                       )}
+                      {(result.status === "error" ||
+                        (result.status === "pending" && retryingIndices.has(index))) &&
+                        onRetryOne && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onRetryOne(index)}
+                            disabled={
+                              isScraping ||
+                              isRetryingAll ||
+                              retryingIndices.has(index)
+                            }
+                            className="gap-2"
+                          >
+                            {retryingIndices.has(index) ? (
+                              <>
+                                <Spinner className="w-3 h-3" />
+                                Retrying…
+                              </>
+                            ) : (
+                              <>
+                                <RotateCwIcon className="w-3 h-3" />
+                                Retry
+                              </>
+                            )}
+                          </Button>
+                        )}
                       {result.product?.sourceUrl && (
                         <Button
                           variant="ghost"

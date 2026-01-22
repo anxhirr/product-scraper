@@ -17,6 +17,7 @@ interface BatchRequest {
   products: BatchProductRequest[]
   batchSize: number
   batchDelay: number
+  navigationDelay?: number
 }
 
 interface BackendProduct {
@@ -220,7 +221,7 @@ async function mapProductToProductData(
 export async function POST(request: NextRequest) {
   try {
     const body: BatchRequest = await request.json()
-    const { products, batchSize, batchDelay } = body
+    const { products, batchSize, batchDelay, navigationDelay } = body
 
     if (!products || products.length === 0) {
       return NextResponse.json(
@@ -248,6 +249,7 @@ export async function POST(request: NextRequest) {
         })),
         batch_size: batchSize,
         batch_delay: batchDelay,
+        navigation_delay: navigationDelay ?? 500,
       }),
     })
 

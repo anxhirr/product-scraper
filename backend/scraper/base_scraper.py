@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from playwright.sync_api import Page, sync_playwright
+import time
 from scraper.models import Product
 
 
@@ -12,8 +13,14 @@ class BaseScraper(ABC):
         pass
     
     @abstractmethod
-    def perform_search(self, page: Page, search_text: str) -> None:
-        """Performs a search on the website using the provided search text."""
+    def perform_search(self, page: Page, search_text: str, navigation_delay: float = 0) -> None:
+        """Performs a search on the website using the provided search text.
+        
+        Args:
+            page: The Playwright page object
+            search_text: The search query text
+            navigation_delay: Delay in seconds between page navigations (default: 0)
+        """
         pass
     
     @abstractmethod
@@ -26,10 +33,14 @@ class BaseScraper(ABC):
         """Extracts all product data from the product page."""
         pass
     
-    def scrape_product(self, search_text: str) -> Product:
+    def scrape_product(self, search_text: str, navigation_delay: float = 0) -> Product:
         """
         Main scraping method that orchestrates the entire scraping flow.
         This method handles browser setup/teardown and calls the abstract methods.
+        
+        Args:
+            search_text: The search query text
+            navigation_delay: Delay in seconds between page navigations (default: 0)
         """
         print(f"Scraping '{search_text}'...")
         with sync_playwright() as p:
@@ -37,12 +48,16 @@ class BaseScraper(ABC):
             page = browser.new_page()
             
             page.goto(self.get_base_url(), wait_until="load")
+            if navigation_delay > 0:
+                time.sleep(navigation_delay)
             
-            self.perform_search(page, search_text)
+            self.perform_search(page, search_text, navigation_delay)
             
             product_url = self.get_first_product_link(page, search_text)
             
             page.goto(product_url)
+            if navigation_delay > 0:
+                time.sleep(navigation_delay)
             
             # Note: Waiting for specific elements is handled in extract_product_data
             # This matches the original implementation pattern

@@ -50,14 +50,17 @@ export default function BulkUploadForm() {
     price?: string
     quantity?: string
   }>({})
-  const [batchSize, setBatchSize] = useState(50)
+  const [batchSize, setBatchSize] = useState(200)
   const [batchDelay, setBatchDelay] = useState(1000)
+  const [navigationDelay, setNavigationDelay] = useState(500)
   const [isScraping, setIsScraping] = useState(false)
   const [scrapeProgress, setScrapeProgress] = useState(0)
   const [results, setResults] = useState<ScrapeResult[]>([])
   const [file, setFile] = useState<File | null>(null)
   const [jobId, setJobId] = useState<string | null>(null)
   const [validProducts, setValidProducts] = useState<MappedProduct[]>([])
+  const [isRetryingAll, setIsRetryingAll] = useState(false)
+  const [retryingIndices, setRetryingIndices] = useState<Set<number>>(new Set())
 
   // Auto-detect column mappings based on column names
   const autoDetectMappings = useCallback((columnNames: string[]) => {
@@ -373,7 +376,7 @@ export default function BulkUploadForm() {
 
         toast({
           title: "File uploaded",
-          description: `Loaded ${totalRows} row(s) with ${columnNames.length} column(s). Products will be processed in batches of up to 50.${detectedFields.length > 0 ? ` Auto-detected: ${detectedFields.join(", ")}` : ""}`,
+          description: `Loaded ${totalRows} row(s) with ${columnNames.length} column(s). Products will be processed in batches of up to 500.${detectedFields.length > 0 ? ` Auto-detected: ${detectedFields.join(", ")}` : ""}`,
         })
       } catch (error) {
         console.error("Error parsing Excel:", error)
@@ -576,12 +579,12 @@ export default function BulkUploadForm() {
     }
 
     // Validate batch size
-    const validBatchSize = Math.max(1, Math.min(50, batchSize || 50))
+    const validBatchSize = Math.max(1, Math.min(500, batchSize || 200))
     if (batchSize !== validBatchSize) {
       setBatchSize(validBatchSize)
       toast({
         title: "Batch size adjusted",
-        description: `Batch size must be between 1 and 50. Set to ${validBatchSize}.`,
+        description: `Batch size must be between 1 and 500. Set to ${validBatchSize}.`,
         variant: "default",
       })
     }
@@ -640,7 +643,7 @@ export default function BulkUploadForm() {
     // Store valid products for later use
     setValidProducts(filteredValidProducts)
 
-    // Process all products in batches (batch size is limited to 50)
+    // Process all products in batches (batch size is limited to 500)
     const totalProducts = filteredValidProducts.length
     const estimatedBatches = Math.ceil(totalProducts / validBatchSize)
     
@@ -673,6 +676,7 @@ export default function BulkUploadForm() {
           products: filteredValidProducts,
           batchSize: validBatchSize,
           batchDelay,
+          navigationDelay,
         }),
       })
 
@@ -710,6 +714,182 @@ export default function BulkUploadForm() {
       setJobId(null)
     }
   }
+
+  type JobPayload = {
+    status: string
+    results: ScrapeResult[]
+    progress: number
+    error?: string
+    total_products: number
+  }
+
+  const pollJobUntilComplete = useCallback(
+    async (id: string, intervalMs = 2000, maxAttempts = 300): Promise<JobPayload> => {
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const res = await fetch(`/api/scrape/jobs/${id}`)
+        if (!res.ok) throw new Error("Failed to get job status")
+        const data: JobPayload = await res.json()
+        if (data.status === "completed" || data.status === "failed") return data
+        await new Promise((r) => setTimeout(r, intervalMs))
+      }
+      throw new Error("Polling timeout: job did not complete")
+    },
+    []
+  )
+
+  const handleRetryOne = useCallback(
+    async (index: number) => {
+      const result = results[index]
+      if (!result || result.status !== "error") return
+      if (isScraping || isRetryingAll) return
+
+      const originalExcelRow = result.originalExcelRow
+      setRetryingIndices((prev) => new Set(prev).add(index))
+      setResults((prev) => {
+        const next = [...prev]
+        next[index] = { ...prev[index], status: "pending" as const }
+        return next
+      })
+
+      try {
+        const bulkRes = await fetch("/api/scrape/bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            products: [result.originalData],
+            batchSize: 1,
+            batchDelay: 0,
+            navigationDelay,
+          }),
+        })
+        if (!bulkRes.ok) {
+          const err = await bulkRes.json().catch(() => ({}))
+          throw new Error(err.error || "Failed to start retry")
+        }
+        const { job_id } = await bulkRes.json()
+        if (!job_id) throw new Error("No job ID returned")
+
+        const payload = await pollJobUntilComplete(job_id)
+        const jobResult = payload.results?.[0]
+
+        setResults((prev) => {
+          const next = [...prev]
+          next[index] = jobResult
+            ? { ...jobResult, originalExcelRow: originalExcelRow ?? prev[index]?.originalExcelRow }
+            : { ...prev[index], status: "error" as const, error: payload.error || "Unknown error" }
+          return next
+        })
+
+        if (jobResult?.status === "success") {
+          toast({ title: "Retry successful", description: "Product scraped successfully." })
+        } else {
+          toast({
+            title: "Retry failed",
+            description: jobResult?.error || payload.error || "Scraping failed",
+            variant: "destructive",
+          })
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Retry failed"
+        toast({ title: "Retry failed", description: msg, variant: "destructive" })
+        setResults((prev) => {
+          const next = [...prev]
+          next[index] = { ...prev[index], status: "error" as const, error: msg }
+          return next
+        })
+      } finally {
+        setRetryingIndices((prev) => {
+          const next = new Set(prev)
+          next.delete(index)
+          return next
+        })
+      }
+    },
+    [results, isScraping, isRetryingAll, pollJobUntilComplete, toast]
+  )
+
+  const handleRetryAll = useCallback(async () => {
+    const errorIndices: number[] = []
+    const errorProducts: MappedProduct[] = []
+    results.forEach((r, i) => {
+      if (r.status === "error") {
+        errorIndices.push(i)
+        errorProducts.push(r.originalData)
+      }
+    })
+    if (errorIndices.length === 0) return
+    if (isScraping || isRetryingAll) return
+
+    setIsRetryingAll(true)
+    setResults((prev) => {
+      const next = [...prev]
+      errorIndices.forEach((i) => {
+        next[i] = { ...prev[i], status: "pending" as const }
+      })
+      return next
+    })
+
+    const validBatchSize = Math.max(1, Math.min(500, batchSize || 200))
+
+    try {
+      const bulkRes = await fetch("/api/scrape/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          products: errorProducts,
+          batchSize: validBatchSize,
+          batchDelay,
+          navigationDelay,
+        }),
+      })
+      if (!bulkRes.ok) {
+        const err = await bulkRes.json().catch(() => ({}))
+        throw new Error(err.error || "Failed to start retry")
+      }
+      const { job_id } = await bulkRes.json()
+      if (!job_id) throw new Error("No job ID returned")
+
+      const payload = await pollJobUntilComplete(job_id)
+      const jobResults = payload.results ?? []
+
+      setResults((prev) => {
+        const next = [...prev]
+        errorIndices.forEach((idx, i) => {
+          const jobResult = jobResults[i]
+          const existing = prev[idx]
+          const originalExcelRow = existing?.originalExcelRow
+          next[idx] = jobResult
+            ? { ...jobResult, originalExcelRow: originalExcelRow ?? next[idx]?.originalExcelRow }
+            : { ...existing, status: "error" as const, error: payload.error || "Unknown error" }
+        })
+        return next
+      })
+
+      const ok = jobResults.filter((r) => r?.status === "success").length
+      const fail = errorIndices.length - ok
+      if (fail === 0) {
+        toast({ title: "Retry all complete", description: `All ${ok} product(s) scraped successfully.` })
+      } else {
+        toast({
+          title: "Retry all complete",
+          description: `${ok} succeeded, ${fail} failed.`,
+          variant: fail > 0 ? "destructive" : "default",
+        })
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Retry all failed"
+      toast({ title: "Retry all failed", description: msg, variant: "destructive" })
+      setResults((prev) => {
+        const next = [...prev]
+        errorIndices.forEach((i) => {
+          next[i] = { ...prev[i], status: "error" as const, error: msg }
+        })
+        return next
+      })
+    } finally {
+      setIsRetryingAll(false)
+    }
+  }, [results, isScraping, isRetryingAll, batchSize, batchDelay, navigationDelay, pollJobUntilComplete, toast])
 
   return (
     <div className="space-y-8">
@@ -783,29 +963,29 @@ export default function BulkUploadForm() {
                   id="batch-size"
                   type="number"
                   min="1"
-                  max="50"
+                  max="500"
                   value={batchSize}
                   onChange={(e) => {
                     const value = parseInt(e.target.value)
                     if (!isNaN(value)) {
-                      // Clamp value between 1 and 50
-                      const clampedValue = Math.max(1, Math.min(50, value))
+                      // Clamp value between 1 and 500
+                      const clampedValue = Math.max(1, Math.min(500, value))
                       setBatchSize(clampedValue)
                     } else if (e.target.value === "") {
                       // Reset to default if empty
-                      setBatchSize(50)
+                      setBatchSize(200)
                     }
                   }}
                   onBlur={(e) => {
                     // Ensure valid value on blur
                     const value = parseInt(e.target.value)
-                    if (isNaN(value) || value < 1 || value > 50) {
-                      setBatchSize(50)
+                    if (isNaN(value) || value < 1 || value > 500) {
+                      setBatchSize(200)
                     }
                   }}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Number of products to scrape in parallel (1-50)
+                  Number of products to scrape in parallel (1-500)
                 </p>
               </div>
               <div className="space-y-2">
@@ -821,6 +1001,21 @@ export default function BulkUploadForm() {
                 />
                 <p className="text-xs text-muted-foreground">
                   Delay to avoid rate limiting (0-10000ms)
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="navigation-delay">Navigation Delay (ms)</Label>
+                <Input
+                  id="navigation-delay"
+                  type="number"
+                  min="0"
+                  max="10000"
+                  step="100"
+                  value={navigationDelay}
+                  onChange={(e) => setNavigationDelay(parseInt(e.target.value) || 0)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Delay between each page navigation to prevent overloading sites (0-10000ms)
                 </p>
               </div>
             </div>
@@ -876,7 +1071,14 @@ export default function BulkUploadForm() {
 
       {/* Results */}
       {results.length > 0 && (
-        <BulkResultsTable results={results} isScraping={isScraping} />
+        <BulkResultsTable
+          results={results}
+          isScraping={isScraping}
+          onRetryOne={handleRetryOne}
+          onRetryAll={handleRetryAll}
+          isRetryingAll={isRetryingAll}
+          retryingIndices={retryingIndices}
+        />
       )}
     </div>
   )
