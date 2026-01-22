@@ -34,6 +34,7 @@ interface ScrapeResult {
   error?: string
   status: "success" | "error" | "pending"
   originalData: MappedProduct
+  originalExcelRow?: ExcelRow // Full original Excel row data
 }
 
 export default function BulkUploadForm() {
@@ -467,14 +468,22 @@ export default function BulkUploadForm() {
                 existingResult.status !== result.status ||
                 existingResult.product !== result.product ||
                 existingResult.error !== result.error) {
-              newResults[index] = result
+              // Preserve originalExcelRow from existing result
+              newResults[index] = {
+                ...result,
+                originalExcelRow: existingResult?.originalExcelRow || result.originalExcelRow
+              }
               hasChanges = true
             }
           } else if (result && result.status === "pending" && index < newResults.length) {
             // Keep existing result if it's already been processed
             // Only update if current result is still pending
             if (newResults[index].status === "pending") {
-              newResults[index] = result
+              // Preserve originalExcelRow from existing result
+              newResults[index] = {
+                ...result,
+                originalExcelRow: newResults[index]?.originalExcelRow || result.originalExcelRow
+              }
               hasChanges = true
             }
           } else if (index >= newResults.length) {
@@ -582,8 +591,8 @@ export default function BulkUploadForm() {
     setResults([])
     setJobId(null)
 
-    // Map Excel data to product requests
-    const products: MappedProduct[] = excelData.map((row) => {
+    // Map Excel data to product requests, keeping track of original row indices
+    const productsWithIndices: Array<{ product: MappedProduct; excelRowIndex: number }> = excelData.map((row, excelRowIndex) => {
       const product: MappedProduct = {
         brand: String(row[columnMapping.brand!] || "").trim(),
       }
@@ -607,15 +616,15 @@ export default function BulkUploadForm() {
         product.quantity = String(row[columnMapping.quantity]).trim()
       }
 
-      return product
+      return { product, excelRowIndex }
     })
 
-    // Filter out invalid products
-    const filteredValidProducts = products.filter(
-      (p) => p.brand && (p.name || p.code)
+    // Filter out invalid products, but keep the index mapping
+    const filteredValidProductsWithIndices = productsWithIndices.filter(
+      ({ product }) => product.brand && (product.name || product.code)
     )
 
-    if (filteredValidProducts.length === 0) {
+    if (filteredValidProductsWithIndices.length === 0) {
       toast({
         title: "No valid products",
         description: "No products found with valid name/code and brand",
@@ -624,6 +633,9 @@ export default function BulkUploadForm() {
       setIsScraping(false)
       return
     }
+
+    // Extract just the products for the API call
+    const filteredValidProducts = filteredValidProductsWithIndices.map(({ product }) => product)
 
     // Store valid products for later use
     setValidProducts(filteredValidProducts)
@@ -639,10 +651,16 @@ export default function BulkUploadForm() {
     })
 
     // Initialize results with pending status for all products
-    const initialResults: ScrapeResult[] = filteredValidProducts.map((p) => ({
-      status: "pending",
-      originalData: p,
-    }))
+    // Map each product to its original Excel row using the stored index
+    const initialResults: ScrapeResult[] = filteredValidProductsWithIndices.map(({ product, excelRowIndex }) => {
+      const originalExcelRow = excelData[excelRowIndex]
+      
+      return {
+        status: "pending" as const,
+        originalData: product,
+        originalExcelRow,
+      }
+    })
     setResults(initialResults)
 
     try {

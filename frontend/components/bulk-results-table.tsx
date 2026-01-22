@@ -33,6 +33,10 @@ import { useToast } from "@/hooks/use-toast"
 import type { ProductData } from "./product-scraper-form"
 import ProductResults from "./product-results"
 
+interface ExcelRow {
+  [key: string]: string | number | null
+}
+
 interface ScrapeResult {
   product?: ProductData
   error?: string
@@ -46,6 +50,7 @@ interface ScrapeResult {
     price?: string
     quantity?: string
   }
+  originalExcelRow?: ExcelRow // Full original Excel row data
 }
 
 interface BulkResultsTableProps {
@@ -164,12 +169,10 @@ export default function BulkResultsTable({
 
   // Helper function to get export data
   const getExportData = () => {
-    // Filter to only successful results with valid product data
-    const successfulResults = results.filter(
-      (r) => r.status === "success" && r.product
-    )
+    // Get all results (successful, error, and pending) for export
+    const allResults = results
 
-    if (successfulResults.length === 0) {
+    if (allResults.length === 0) {
       return null
     }
 
@@ -191,71 +194,125 @@ export default function BulkResultsTable({
       return ""
     }
 
-    // Define headers
-    const headers = [
-      "Name",
-      "Code",
-      "Barcode",
-      "Price",
-      "Quantity",
-      "Brand",
-      "Category",
-      "Description",
-      "Specifications",
-      "Images",
-      "Primary Image",
-      "Source URL",
-    ]
+    // Get all unique original Excel column names from all results
+    const originalExcelColumns = new Set<string>()
+    allResults.forEach((result) => {
+      if (result.originalExcelRow) {
+        Object.keys(result.originalExcelRow).forEach((key) => {
+          originalExcelColumns.add(key)
+        })
+      }
+    })
+    const sortedOriginalColumns = Array.from(originalExcelColumns).sort()
 
-    // Transform products to rows
-    const rows = successfulResults.map((result) => {
-      const product = result.product!
-      // Prioritize Excel values over scraped values
-      const barcode = result.originalData.barcode || getSpecValue(product.specifications, [
-        "barcode",
-        "Barcode",
-        "BARCODE",
-        "ean",
-        "EAN",
-        "upc",
-        "UPC",
-      ])
-      const category = result.originalData.category || getSpecValue(product.specifications, [
-        "category",
-        "Category",
-        "CATEGORY",
-        "category_name",
-        "Category Name",
-      ])
-      const quantity = result.originalData.quantity || getSpecValue(product.specifications, [
-        "quantity",
-        "Quantity",
-        "QUANTITY",
-        "qty",
-        "Qty",
-        "stock",
-        "Stock",
-      ])
-      const price = result.originalData.price || product.price || ""
-      return [
-        product.name || "",
-        product.code || "",
-        formatBarcodeForCsv(barcode),
-        price,
-        quantity,
-        product.brand || "",
-        category,
-        product.description || "",
-        product.specifications
-          ? JSON.stringify(product.specifications)
-          : "",
-        product.images?.join(",") || "",
-        product.primaryImage || "",
-        product.sourceUrl || "",
-      ]
+    // Define headers: Original Excel columns (with prefix), then Scraped columns
+    const headers: string[] = []
+    
+    // Add original Excel columns with "Original: " prefix
+    sortedOriginalColumns.forEach((col) => {
+      headers.push(`Original: ${col}`)
+    })
+    
+    // Add scraped data columns
+    headers.push(
+      "Scraped: Name",
+      "Scraped: Code",
+      "Scraped: Barcode",
+      "Scraped: Price",
+      "Scraped: Quantity",
+      "Scraped: Brand",
+      "Scraped: Category",
+      "Scraped: Description",
+      "Scraped: Specifications",
+      "Scraped: Images",
+      "Scraped: Primary Image",
+      "Scraped: Source URL",
+      "Scraped: Status"
+    )
+
+    // Transform results to rows
+    const rows = allResults.map((result) => {
+      const row: (string | number | null)[] = []
+      
+      // Add original Excel row data (in the same order as headers)
+      sortedOriginalColumns.forEach((col) => {
+        const value = result.originalExcelRow?.[col]
+        // Convert to string, handling null/undefined
+        row.push(value != null ? String(value) : "")
+      })
+      
+      // Add scraped data
+      if (result.status === "success" && result.product) {
+        const product = result.product
+        // Prioritize Excel values over scraped values for certain fields
+        const barcode = result.originalData.barcode || getSpecValue(product.specifications, [
+          "barcode",
+          "Barcode",
+          "BARCODE",
+          "ean",
+          "EAN",
+          "upc",
+          "UPC",
+        ])
+        const category = result.originalData.category || getSpecValue(product.specifications, [
+          "category",
+          "Category",
+          "CATEGORY",
+          "category_name",
+          "Category Name",
+        ])
+        const quantity = result.originalData.quantity || getSpecValue(product.specifications, [
+          "quantity",
+          "Quantity",
+          "QUANTITY",
+          "qty",
+          "Qty",
+          "stock",
+          "Stock",
+        ])
+        const price = result.originalData.price || product.price || ""
+        
+        row.push(
+          product.name || "",
+          product.code || "",
+          formatBarcodeForCsv(barcode),
+          price,
+          quantity,
+          product.brand || "",
+          category,
+          product.description || "",
+          product.specifications
+            ? JSON.stringify(product.specifications)
+            : "",
+          product.images?.join(",") || "",
+          product.primaryImage || "",
+          product.sourceUrl || "",
+          result.status
+        )
+      } else {
+        // For errors or pending, fill scraped columns with empty values or error message
+        const errorMessage = result.status === "error" && result.error ? result.error : ""
+        row.push(
+          "", // Name
+          "", // Code
+          "", // Barcode
+          "", // Price
+          "", // Quantity
+          "", // Brand
+          "", // Category
+          errorMessage, // Description (use for error message)
+          "", // Specifications
+          "", // Images
+          "", // Primary Image
+          "", // Source URL
+          result.status // Status
+        )
+      }
+
+      return row
     })
 
-    return { headers, rows, count: successfulResults.length }
+    return { headers, rows, count: allResults.length }
   }
 
   const exportToCsv = () => {
@@ -264,7 +321,7 @@ export default function BulkResultsTable({
     if (!exportData) {
       toast({
         title: "No data to export",
-        description: "There are no successful scraping results to export",
+        description: "There are no results to export",
         variant: "destructive",
       })
       return
@@ -276,16 +333,24 @@ export default function BulkResultsTable({
     // Add headers
     csvRows.push(exportData.headers.map(escapeCsvValue).join(","))
 
-    // Add data rows - barcode is at index 2 (Name=0, Code=1, Barcode=2)
-    const BARCODE_INDEX = 2
+    // Add data rows
+    // Find the index of "Scraped: Barcode" column for special handling
+    const barcodeHeaderIndex = exportData.headers.findIndex((h) => h === "Scraped: Barcode")
+    
     exportData.rows.forEach((row) => {
       csvRows.push(
         row
-          .map((cell, index) =>
-            index === BARCODE_INDEX
-              ? escapeCsvValueWithBarcode(String(cell), true)
-              : escapeCsvValue(String(cell))
-          )
+          .map((cell, index) => {
+            const value = String(cell ?? "")
+            // Check if this is a barcode column (either in original Excel or scraped)
+            const isBarcode = 
+              (barcodeHeaderIndex >= 0 && index === barcodeHeaderIndex) ||
+              (index < exportData.headers.length && 
+               exportData.headers[index].toLowerCase().includes("barcode"))
+            return isBarcode
+              ? escapeCsvValueWithBarcode(value, true)
+              : escapeCsvValue(value)
+          })
           .join(",")
       )
     })
@@ -316,7 +381,7 @@ export default function BulkResultsTable({
 
     toast({
       title: "Export successful",
-      description: `Exported ${exportData.count} product(s) to ${filename}`,
+      description: `Exported ${exportData.count} product(s) (including original Excel data and scraped data) to ${filename}`,
     })
   }
 
@@ -332,7 +397,7 @@ export default function BulkResultsTable({
               {pendingCount > 0 && `, ${pendingCount} pending`}
             </CardDescription>
           </div>
-          {successCount > 0 && (
+          {results.length > 0 && (
             <Button
               variant="outline"
               size="sm"
@@ -350,9 +415,12 @@ export default function BulkResultsTable({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Code</TableHead>
-                <TableHead>Price</TableHead>
+                <TableHead>Original Name</TableHead>
+                <TableHead>Original Code</TableHead>
+                <TableHead>Original Price</TableHead>
+                <TableHead>Scraped Name</TableHead>
+                <TableHead>Scraped Code</TableHead>
+                <TableHead>Scraped Price</TableHead>
                 <TableHead>Brand</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -362,19 +430,38 @@ export default function BulkResultsTable({
               {results.map((result, index) => (
                 <TableRow key={index}>
                   <TableCell className="font-medium">
+                    {result.originalData.name || "-"}
+                  </TableCell>
+                  <TableCell>
+                    {result.originalData.code || "-"}
+                  </TableCell>
+                  <TableCell>
+                    {result.originalData.price ? (
+                      <span className="text-muted-foreground">
+                        {(() => {
+                          const price = result.originalData.price || ""
+                          return price.includes("ALL") || price.includes("Lek") || price.includes("lek")
+                            ? price
+                            : `${price} ALL`
+                        })()}
+                      </span>
+                    ) : (
+                      "-"
+                    )}
+                  </TableCell>
+                  <TableCell className="font-medium">
                     {result.product?.name ||
                       result.product?.nameOriginal ||
-                      result.originalData.name ||
                       "-"}
                   </TableCell>
                   <TableCell>
-                    {result.product?.code || result.originalData.code || "-"}
+                    {result.product?.code || "-"}
                   </TableCell>
                   <TableCell>
-                    {result.originalData.price || result.product?.price ? (
+                    {result.product?.price ? (
                       <span className="font-semibold text-primary">
                         {(() => {
-                          const price = result.originalData.price || result.product?.price || ""
+                          const price = result.product?.price || ""
                           return price.includes("ALL") || price.includes("Lek") || price.includes("lek")
                             ? price
                             : `${price} ALL`
