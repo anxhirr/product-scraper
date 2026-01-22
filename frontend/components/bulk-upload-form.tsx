@@ -376,7 +376,7 @@ export default function BulkUploadForm() {
 
         toast({
           title: "File uploaded",
-          description: `Loaded ${totalRows} row(s) with ${columnNames.length} column(s). Products will be processed in batches of up to 500.${detectedFields.length > 0 ? ` Auto-detected: ${detectedFields.join(", ")}` : ""}`,
+          description: `Loaded ${totalRows} row(s) with ${columnNames.length} column(s). Products will be processed sequentially one-by-one.${detectedFields.length > 0 ? ` Auto-detected: ${detectedFields.join(", ")}` : ""}`,
         })
       } catch (error) {
         console.error("Error parsing Excel:", error)
@@ -578,16 +578,8 @@ export default function BulkUploadForm() {
       return
     }
 
-    // Validate batch size
-    const validBatchSize = Math.max(1, Math.min(500, batchSize || 200))
-    if (batchSize !== validBatchSize) {
-      setBatchSize(validBatchSize)
-      toast({
-        title: "Batch size adjusted",
-        description: `Batch size must be between 1 and 500. Set to ${validBatchSize}.`,
-        variant: "default",
-      })
-    }
+    // Note: batchSize is kept for backward compatibility but not used for parallelization
+    // Products are processed sequentially one-by-one
 
     setIsScraping(true)
     setScrapeProgress(0)
@@ -643,13 +635,12 @@ export default function BulkUploadForm() {
     // Store valid products for later use
     setValidProducts(filteredValidProducts)
 
-    // Process all products in batches (batch size is limited to 500)
+    // Process all products sequentially one-by-one
     const totalProducts = filteredValidProducts.length
-    const estimatedBatches = Math.ceil(totalProducts / validBatchSize)
     
     toast({
       title: "Starting bulk scrape",
-      description: `Processing ${totalProducts} product(s) in ${estimatedBatches} batch(es) of up to ${validBatchSize} products each.`,
+      description: `Processing ${totalProducts} product(s) sequentially one-by-one.`,
       variant: "default",
     })
 
@@ -674,7 +665,7 @@ export default function BulkUploadForm() {
         },
         body: JSON.stringify({
           products: filteredValidProducts,
-          batchSize: validBatchSize,
+          batchSize: 1, // Not used for parallelization, kept for backward compatibility
           batchDelay,
           navigationDelay,
         }),
@@ -829,15 +820,13 @@ export default function BulkUploadForm() {
       return next
     })
 
-    const validBatchSize = Math.max(1, Math.min(500, batchSize || 200))
-
     try {
       const bulkRes = await fetch("/api/scrape/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           products: errorProducts,
-          batchSize: validBatchSize,
+          batchSize: 1, // Not used for parallelization, kept for backward compatibility
           batchDelay,
           navigationDelay,
         }),
@@ -946,52 +935,21 @@ export default function BulkUploadForm() {
         />
       )}
 
-      {/* Batch Configuration */}
+      {/* Processing Configuration */}
       {columns.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Batch Configuration</CardTitle>
+            <CardTitle>Processing Configuration</CardTitle>
             <CardDescription>
-              Configure how products are scraped in batches
+              Configure how products are scraped sequentially (one-by-one)
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="batch-size">Batch Size</Label>
+                <Label htmlFor="product-delay">Delay Between Products (ms)</Label>
                 <Input
-                  id="batch-size"
-                  type="number"
-                  min="1"
-                  max="500"
-                  value={batchSize}
-                  onChange={(e) => {
-                    const value = parseInt(e.target.value)
-                    if (!isNaN(value)) {
-                      // Clamp value between 1 and 500
-                      const clampedValue = Math.max(1, Math.min(500, value))
-                      setBatchSize(clampedValue)
-                    } else if (e.target.value === "") {
-                      // Reset to default if empty
-                      setBatchSize(200)
-                    }
-                  }}
-                  onBlur={(e) => {
-                    // Ensure valid value on blur
-                    const value = parseInt(e.target.value)
-                    if (isNaN(value) || value < 1 || value > 500) {
-                      setBatchSize(200)
-                    }
-                  }}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Number of products to scrape in parallel (1-500)
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="batch-delay">Delay Between Batches (ms)</Label>
-                <Input
-                  id="batch-delay"
+                  id="product-delay"
                   type="number"
                   min="0"
                   max="10000"
@@ -1000,7 +958,7 @@ export default function BulkUploadForm() {
                   onChange={(e) => setBatchDelay(parseInt(e.target.value) || 1000)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Delay to avoid rate limiting (0-10000ms)
+                  Delay between each product to avoid rate limiting (0-10000ms)
                 </p>
               </div>
               <div className="space-y-2">
@@ -1024,10 +982,9 @@ export default function BulkUploadForm() {
                 <p className="text-sm">
                   Estimated time: ~
                   {Math.ceil(
-                    (excelData.length / batchSize) * (batchDelay / 1000) +
-                      excelData.length * 2
+                    excelData.length * ((batchDelay / 1000) + 3)
                   )}{" "}
-                  seconds (approximate)
+                  seconds (approximate, ~3 seconds per product + delays)
                 </p>
               </div>
             )}

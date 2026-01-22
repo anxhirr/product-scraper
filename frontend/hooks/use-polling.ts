@@ -7,7 +7,7 @@ interface UsePollingOptions<T> {
   onSuccess?: (data: T) => void
   onError?: (error: Error) => void
   shouldStop?: (data: T) => boolean
-  maxDuration?: number // Maximum polling duration in milliseconds (default: 10 minutes)
+  maxDuration?: number | null // Maximum polling duration in milliseconds (null/undefined = no timeout)
 }
 
 export function usePolling<T>({
@@ -17,7 +17,7 @@ export function usePolling<T>({
   onSuccess,
   onError,
   shouldStop,
-  maxDuration = 600000, // 10 minutes default
+  maxDuration = null, // No timeout by default
 }: UsePollingOptions<T>) {
   const [data, setData] = useState<T | null>(null)
   const [error, setError] = useState<Error | null>(null)
@@ -133,8 +133,8 @@ export function usePolling<T>({
         return
       }
 
-      // Check max duration
-      if (startTimeRef.current && Date.now() - startTimeRef.current > maxDuration) {
+      // Check max duration (only if maxDuration is set)
+      if (maxDuration != null && startTimeRef.current && Date.now() - startTimeRef.current > maxDuration) {
         stopPolling()
         setError(new Error("Polling timeout: Maximum duration exceeded"))
         return
@@ -170,13 +170,15 @@ export function usePolling<T>({
       poll()
     }, interval)
 
-    // Set up max duration timeout
-    timeoutRef.current = setTimeout(() => {
-      if (mountedRef.current && enabledRef.current) {
-        stopPolling()
-        setError(new Error("Polling timeout: Maximum duration exceeded"))
-      }
-    }, maxDuration)
+    // Set up max duration timeout (only if maxDuration is set)
+    if (maxDuration != null) {
+      timeoutRef.current = setTimeout(() => {
+        if (mountedRef.current && enabledRef.current) {
+          stopPolling()
+          setError(new Error("Polling timeout: Maximum duration exceeded"))
+        }
+      }, maxDuration)
+    }
 
     return () => {
       stopPolling()

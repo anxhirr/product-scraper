@@ -1,4 +1,5 @@
-from playwright.sync_api import Page
+from playwright.sync_api import Page, sync_playwright
+import time
 from scraper.base_scraper import BaseScraper
 from scraper.models import Product
 
@@ -8,6 +9,60 @@ class RockahulaScraper(BaseScraper):
     
     def get_base_url(self) -> str:
         return "https://www.rockahulakids.com/"
+    
+    def scrape_product(self, search_text: str, navigation_delay: float = 0) -> Product:
+        """
+        Override scrape_product to add longer timeout for bulk scraping.
+        """
+        print(f"Scraping '{search_text}'...")
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            
+            # Use longer timeout and less strict wait strategy for initial page load
+            # "domcontentloaded" is faster than "load" and sufficient for our needs
+            try:
+                page.goto(self.get_base_url(), wait_until="domcontentloaded", timeout=60000)
+            except Exception as e:
+                # If domcontentloaded times out, try with networkidle
+                print(f"  ⚠ Initial load with domcontentloaded timed out, trying networkidle...")
+                try:
+                    page.goto(self.get_base_url(), wait_until="networkidle", timeout=60000)
+                except Exception as e2:
+                    # Last resort: just wait for commit
+                    print(f"  ⚠ Networkidle also timed out, using commit...")
+                    page.goto(self.get_base_url(), wait_until="commit", timeout=60000)
+                    # Wait a bit for page to be interactive
+                    page.wait_for_load_state("domcontentloaded", timeout=30000)
+            
+            if navigation_delay > 0:
+                time.sleep(navigation_delay)
+            
+            self.perform_search(page, search_text, navigation_delay)
+            
+            product_url = self.get_first_product_link(page, search_text)
+            
+            # Use longer timeout for product page as well
+            try:
+                page.goto(product_url, wait_until="domcontentloaded", timeout=60000)
+            except Exception as e:
+                print(f"  ⚠ Product page load timed out, trying networkidle...")
+                try:
+                    page.goto(product_url, wait_until="networkidle", timeout=60000)
+                except Exception as e2:
+                    print(f"  ⚠ Networkidle also timed out, using commit...")
+                    page.goto(product_url, wait_until="commit", timeout=60000)
+                    page.wait_for_load_state("domcontentloaded", timeout=30000)
+            
+            if navigation_delay > 0:
+                time.sleep(navigation_delay)
+            
+            product = self.extract_product_data(page, product_url)
+            
+            browser.close()
+            
+            print(f"✓ Scraping completed")
+            return product
     
     def perform_search(self, page: Page, search_text: str, navigation_delay: float = 0) -> None:
         """Performs search on Rockahula website."""
