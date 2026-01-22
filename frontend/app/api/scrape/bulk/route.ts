@@ -249,7 +249,7 @@ export async function POST(request: NextRequest) {
         })),
         batch_size: batchSize,
         batch_delay: batchDelay,
-        navigation_delay: navigationDelay ?? 500,
+        navigation_delay: navigationDelay ?? 1000,
       }),
     })
 

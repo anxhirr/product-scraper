@@ -60,7 +60,7 @@ class BatchSearchRequestBody(BaseModel):
     products: List[BatchSearchRequest]
     batch_size: int = 200
     batch_delay: int = 1000  # milliseconds
-    navigation_delay: int = 500  # milliseconds
+    navigation_delay: int = 1000  # milliseconds
 
 
 class BatchSearchResponse(BaseModel):

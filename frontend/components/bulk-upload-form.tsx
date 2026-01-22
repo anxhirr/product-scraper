@@ -52,7 +52,7 @@ export default function BulkUploadForm() {
   }>({})
   const [batchSize, setBatchSize] = useState(200)
   const [batchDelay, setBatchDelay] = useState(1000)
-  const [navigationDelay, setNavigationDelay] = useState(500)
+  const [navigationDelay, setNavigationDelay] = useState(1000)
   const [isScraping, setIsScraping] = useState(false)
   const [scrapeProgress, setScrapeProgress] = useState(0)
   const [results, setResults] = useState<ScrapeResult[]>([])
