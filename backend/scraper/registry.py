@@ -3,6 +3,7 @@ from scraper.base_scraper import BaseScraper
 from scraper.hape_global_scraper import HapeGlobalScraper
 from scraper.elrincondelosgenios_scraper import ElRinconDeLosGeniosScraper
 from scraper.elrincondelosgenios_api_scraper import ElRinconDeLosGeniosApiScraper
+from scraper.liewood_scraper import LiewoodScraper
 
 
 # Registry mapping site identifiers to scraper classes
@@ -12,12 +13,14 @@ SCRAPER_REGISTRY = {
     "hape_global": HapeGlobalScraper,
     "elrincondelosgenios": ElRinconDeLosGeniosScraper,
     "elrincondelosgenios_api": ElRinconDeLosGeniosApiScraper,
+    "liewood": LiewoodScraper,
 }
 
 # Brand to sites mapping (ordered list: primary, fallback, etc.)
 BRAND_TO_SITES_MAP = {
     "hape": ["hape", "hape_global"],
     "elrincondelosgenios": ["elrincondelosgenios_api", "elrincondelosgenios"],
+    "liewood": ["liewood"],
 }
 
 
