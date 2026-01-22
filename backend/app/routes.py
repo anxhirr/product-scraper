@@ -18,7 +18,7 @@ def search(site: str, query: str):
     Search for a product on the specified website.
     
     Args:
-        site: Website identifier (e.g., "hape", "elrincondelosgenios")
+        site: Website identifier (e.g., "hape", "liewood")
         query: Search query text
     
     Returns:
