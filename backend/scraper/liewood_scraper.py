@@ -1,6 +1,7 @@
 from playwright.sync_api import Page
 from urllib.parse import quote_plus
 import json
+from bs4 import BeautifulSoup
 from scraper.base_scraper import BaseScraper
 from scraper.models import Product
 
@@ -208,6 +209,11 @@ class LiewoodScraper(BaseScraper):
                 description = product_json["description"]
             elif "content" in product_json:
                 description = product_json["content"]
+            
+            # Strip HTML tags from JSON description (JSON contains HTML)
+            if description:
+                soup = BeautifulSoup(description, 'html.parser')
+                description = soup.get_text(separator=' ', strip=True)
         
         # Also try to get from accordion
         if not description:
@@ -215,7 +221,7 @@ class LiewoodScraper(BaseScraper):
                 # Find accordion with "DESCRIPTION" in summary
                 description_accordion = page.locator("accordion-disclosure").filter(has_text="DESCRIPTION")
                 if description_accordion.count() > 0:
-                    # Get the content from accordion
+                    # Get the content from accordion (already plain text from inner_text)
                     accordion_content = description_accordion.first.locator(".accordion__content")
                     if accordion_content.count() > 0:
                         description = accordion_content.first.inner_text().strip()
@@ -277,25 +283,51 @@ class LiewoodScraper(BaseScraper):
         # Extract specifications (if available)
         specifications = ""
         try:
-            # Look for accordion sections that might contain specifications
-            # This is optional as specifications might not always be present
-            accordions = page.locator("accordion-disclosure")
-            accordion_count = accordions.count()
+            # Find specifications in the DESCRIPTION accordion ONLY
+            # Specifications are in a span with class "metafield-multi_line_text_field"
+            # The structure is: accordion-disclosure > details > summary > div.accordion__content > p > span.metafield-multi_line_text_field
             
-            spec_sections = []
-            for i in range(accordion_count):
-                accordion = accordions.nth(i)
-                summary_text = accordion.locator(".accordion__summary").inner_text().strip()
-                # Look for sections like "CARE", "DELIVERY", etc. that might have useful info
-                if summary_text and summary_text not in ["DESCRIPTION"]:
-                    content = accordion.locator(".accordion__content")
-                    if content.count() > 0:
-                        content_text = content.first.inner_text().strip()
-                        if content_text:
-                            spec_sections.append(f"{summary_text}: {content_text}")
+            # Find all summary elements and check which one contains "DESCRIPTION"
+            all_summaries = page.locator("summary.accordion__summary")
+            summary_count = all_summaries.count()
             
-            if spec_sections:
-                specifications = "\n".join(spec_sections)
+            description_accordion = None
+            for i in range(summary_count):
+                summary = all_summaries.nth(i)
+                summary_text = summary.inner_text().strip()
+                
+                # Check if this summary contains "DESCRIPTION" (case-insensitive)
+                if "DESCRIPTION" in summary_text.upper():
+                    # Get the parent accordion-disclosure element (custom element wrapper)
+                    accordion_wrapper = summary.locator("xpath=ancestor::accordion-disclosure")
+                    if accordion_wrapper.count() > 0:
+                        description_accordion = accordion_wrapper.first
+                        break
+            
+            if description_accordion:
+                # Look for the metafield span within the accordion content div
+                # The span is inside: details > div.accordion__content > p > span
+                metafield_span = description_accordion.locator("details .accordion__content span.metafield-multi_line_text_field")
+                
+                # If not found, try without the details selector
+                if metafield_span.count() == 0:
+                    metafield_span = description_accordion.locator(".accordion__content span.metafield-multi_line_text_field")
+                
+                if metafield_span.count() > 0:
+                    span_element = metafield_span.first
+                    # Use text_content() since inner_text() returns null for non-visible elements
+                    # text_content() works regardless of visibility
+                    text_content = span_element.text_content()
+                    spec_text = text_content.strip() if text_content else ""
+                    
+                    if spec_text:
+                        # Specifications can be separated by periods or semicolons
+                        # Try semicolon first (more common), then period
+                        if ";" in spec_text:
+                            spec_parts = [s.strip() for s in spec_text.split(";") if s.strip()]
+                        else:
+                            spec_parts = [s.strip() for s in spec_text.split(".") if s.strip()]
+                        specifications = "\n".join(spec_parts)
         except Exception:
             pass
         

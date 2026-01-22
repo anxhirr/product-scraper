@@ -79,12 +79,35 @@ function parseSpecifications(specs: string): Record<string, string> {
     if (lines.length > 1) {
       // Multiple lines - parse each line
       for (const line of lines) {
+        // Try colon-separated format first: "Key: Value"
         const colonIndex = line.indexOf(":")
         if (colonIndex > 0) {
           const key = line.substring(0, colonIndex).trim()
           const value = line.substring(colonIndex + 1).trim()
           if (key && value) {
             result[key] = value
+          }
+        } else {
+          // Try format without colon: "Key (Unit) Value" or "Key Value"
+          // Pattern: "Key (Unit) Value" or "Key Value"
+          const parenMatch = line.match(/^(.+?)\s*\([^)]+\)\s+(.+)$/)
+          if (parenMatch) {
+            // Format: "Key (Unit) Value"
+            const key = parenMatch[1].trim()
+            const value = parenMatch[2].trim()
+            if (key && value) {
+              result[key] = value
+            }
+          } else {
+            // Try simple space-separated: "Key Value" (take last space as separator)
+            const lastSpaceIndex = line.lastIndexOf(" ")
+            if (lastSpaceIndex > 0) {
+              const key = line.substring(0, lastSpaceIndex).trim()
+              const value = line.substring(lastSpaceIndex + 1).trim()
+              if (key && value) {
+                result[key] = value
+              }
+            }
           }
         }
       }
@@ -120,8 +143,8 @@ function parseSpecifications(specs: string): Record<string, string> {
       }
     }
   }
-  // If all else fails, return as a single key-value pair
-  return { Specifications: specs }
+  // If all else fails, return empty object (specs will be shown as-is in specificationsOriginal)
+  return {}
 }
 
 // Map backend Product to frontend ProductData
