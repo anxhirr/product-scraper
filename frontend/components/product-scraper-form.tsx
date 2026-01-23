@@ -20,14 +20,11 @@ import { usePolling } from "@/hooks/use-polling"
 
 export interface ProductData {
   name: string
-  nameOriginal?: string
   code: string
   price?: string
   brand?: string
   description?: string
-  descriptionOriginal?: string
   specifications?: Record<string, string>
-  specificationsOriginal?: Record<string, string>
   images?: string[]
   primaryImage?: string
   sourceUrl?: string

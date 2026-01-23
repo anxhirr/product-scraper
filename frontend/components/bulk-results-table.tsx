@@ -487,9 +487,7 @@ export default function BulkResultsTable({
                     )}
                   </TableCell>
                   <TableCell className="font-medium">
-                    {result.product?.name ||
-                      result.product?.nameOriginal ||
-                      "-"}
+                    {result.product?.name || "-"}
                   </TableCell>
                   <TableCell>
                     {result.product?.code || "-"}
@@ -598,9 +596,7 @@ export default function BulkResultsTable({
               <div className="flex-1 min-w-0">
                 <SheetTitle>
                   {selectedResult?.status === "success" && selectedResult?.product
-                    ? selectedResult.product.name ||
-                      selectedResult.product.nameOriginal ||
-                      "Product Details"
+                    ? selectedResult.product.name || "Product Details"
                     : "Error Details"}
                 </SheetTitle>
                 <SheetDescription>

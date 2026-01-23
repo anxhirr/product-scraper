@@ -32,19 +32,9 @@ class LiewoodScraper(BaseScraper):
         # Wait for the page to be ready
         page.wait_for_load_state("domcontentloaded")
         
-        # Wait for search result panel or product list to appear (element-based wait)
-        # This replaces the fixed 5000ms timeout with a more efficient element-based wait
-        try:
-            # Try waiting for search-result-panel first (more specific)
-            search_panel = page.locator("search-result-panel#main-search-results-product, search-result-panel")
-            search_panel.first.wait_for(state="visible", timeout=15000)
-        except Exception:
-            # Fallback to product-list
-            try:
-                product_list = page.locator("product-list")
-                product_list.wait_for(state="visible", timeout=15000)
-            except Exception:
-                pass  # Continue even if elements not found immediately
+        # Wait for search result panel to appear (element-based wait)
+        search_panel = page.locator("search-result-panel#main-search-results-product")
+        search_panel.wait_for(state="visible", timeout=15000)
         
         # Wait for network to be idle (search results might be loading via API calls)
         # Reduced timeout since we already waited for elements
@@ -58,53 +48,16 @@ class LiewoodScraper(BaseScraper):
     def get_first_product_link(self, page: Page, search_text: str) -> str:
         """Extracts the first product link from Liewood search results."""
         # Wait for search result panel to load first
-        try:
-            search_panel = page.locator("search-result-panel#main-search-results-product")
-            search_panel.wait_for(state="visible", timeout=20000)
-        except Exception:
-            # Try without ID
-            search_panel = page.locator("search-result-panel")
-            try:
-                search_panel.first.wait_for(state="visible", timeout=15000)
-            except Exception:
-                pass
+        search_panel = page.locator("search-result-panel#main-search-results-product")
+        search_panel.wait_for(state="visible", timeout=20000)
         
         # Wait for product list to appear
-        try:
-            product_list = page.locator("product-list")
-            product_list.wait_for(state="visible", timeout=15000)
-        except Exception:
-            pass
+        product_list = page.locator("product-list")
+        product_list.wait_for(state="visible", timeout=15000)
         
-        # Wait for product cards to appear - try multiple selectors
-        product_card = None
-        card_selectors = [
-            "product-card.product-card",
-            "product-card",
-            ".product-list product-card",
-            "product-list product-card"
-        ]
-        
-        for selector in card_selectors:
-            try:
-                cards = page.locator(selector)
-                if cards.count() > 0:
-                    product_card = cards.first
-                    product_card.wait_for(state="visible", timeout=10000)
-                    if cards.count() > 0:
-                        break
-            except Exception:
-                continue
-        
-        # If still no cards found, try one more time with a brief wait
-        if product_card is None:
-            try:
-                all_cards = page.locator("product-card")
-                all_cards.first.wait_for(state="visible", timeout=5000)
-                if all_cards.count() > 0:
-                    product_card = all_cards.first
-            except Exception:
-                pass
+        # Wait for product cards to appear
+        product_card = page.locator("product-card.product-card").first
+        product_card.wait_for(state="visible", timeout=10000)
         
         # Consolidated "no results" check - only check once after waiting for cards
         # Cache page text to avoid multiple calls
@@ -138,42 +91,13 @@ class LiewoodScraper(BaseScraper):
                 raise Exception(f"No products found for search: '{search_text}'")
             raise Exception(f"No product cards found in search results. Page may still be loading or search returned no results.")
         
-        # Find the product link - try multiple selectors
-        link_selectors = [
-            ".product-card__media a",
-            "a.product-card__media",
-            ".product-title a",
-            "a[href*='/products/']"
-        ]
-        
-        product_link = None
-        for selector in link_selectors:
-            link_elements = product_card.locator(selector)
-            if link_elements.count() > 0:
-                product_link = link_elements.first
-                # Wait for the link to be ready
-                try:
-                    product_link.wait_for(state="attached", timeout=5000)
-                except Exception:
-                    pass
-                break
-        
-        if product_link is None:
-            raise Exception("Could not find product link in first product card")
-        
-        # Wait for the link to have an href attribute (might be set dynamically)
-        # Use element-based wait: wait for element to be attached, then check href
-        # If href is not immediately available, use a brief efficient wait
+        # Find the product link
+        product_link = product_card.locator(".product-card__media a").first
         product_link.wait_for(state="attached", timeout=5000)
         href = product_link.get_attribute("href")
         
-        # If href is still not available, wait briefly and check again (max 2 attempts)
         if not href:
-            page.wait_for_timeout(500)  # Brief wait for dynamic content
-            href = product_link.get_attribute("href")
-        
-        if not href:
-            raise Exception("Product link has no href attribute after waiting")
+            raise Exception("Product link has no href attribute")
         
         # Handle relative URLs
         if href.startswith("http"):
@@ -203,128 +127,52 @@ class LiewoodScraper(BaseScraper):
             pass
         
         # Extract title
-        title = ""
-        if product_json and "title" in product_json:
-            title = product_json["title"]
-        else:
-            # Try HTML selectors
-            title_selectors = [
-                "h1.ProductMeta__Title .product-title",
-                ".product-title",
-                "h1.ProductMeta__Title",
-                "h1"
-            ]
-            for selector in title_selectors:
-                title_el = page.locator(selector).first
-                if title_el.count() > 0:
-                    title = title_el.inner_text().strip()
-                    if title:
-                        break
-        
-        if not title:
-            raise Exception("Could not find product title")
+        if not product_json or "title" not in product_json:
+            raise Exception("Product JSON not found or missing title")
+        title = product_json["title"]
         
         # Extract price
-        price = ""
-        if product_json and "price" in product_json:
-            # Price is in cents, convert to euros
-            price_cents = product_json["price"]
-            price = f"€{price_cents / 100:.2f}"
-        else:
-            # Try HTML selectors
-            price_selectors = [
-                "sale-price",
-                ".sale-price",
-                "price-list sale-price",
-                ".price-list .sale-price"
-            ]
-            for selector in price_selectors:
-                price_el = page.locator(selector).first
-                if price_el.count() > 0:
-                    price_text = price_el.inner_text().strip()
-                    # Remove "Sale price" label if present
-                    price = price_text.replace("Sale price", "").strip()
-                    if price:
-                        break
-        
-        if not price:
-            price = "Price not available"
+        if not product_json or "price" not in product_json:
+            raise Exception("Product JSON not found or missing price")
+        # Price is in cents, convert to euros
+        price_cents = product_json["price"]
+        price = f"€{price_cents / 100:.2f}"
         
         # Extract description
+        if not product_json:
+            raise Exception("Product JSON not found")
         description = ""
-        if product_json:
-            # Try description field first
-            if "description" in product_json:
-                description = product_json["description"]
-            elif "content" in product_json:
-                description = product_json["content"]
-            
-            # Strip HTML tags from JSON description (JSON contains HTML)
-            if description:
-                soup = BeautifulSoup(description, 'html.parser')
-                description = soup.get_text(separator=' ', strip=True)
+        # Try description field first
+        if "description" in product_json:
+            description = product_json["description"]
+        elif "content" in product_json:
+            description = product_json["content"]
         
-        # Also try to get from accordion
-        if not description:
-            try:
-                # Find accordion with "DESCRIPTION" in summary
-                description_accordion = page.locator("accordion-disclosure").filter(has_text="DESCRIPTION")
-                if description_accordion.count() > 0:
-                    # Get the content from accordion (already plain text from inner_text)
-                    accordion_content = description_accordion.first.locator(".accordion__content")
-                    if accordion_content.count() > 0:
-                        description = accordion_content.first.inner_text().strip()
-            except Exception:
-                pass
+        # Strip HTML tags from JSON description (JSON contains HTML)
+        if description:
+            soup = BeautifulSoup(description, 'html.parser')
+            description = soup.get_text(separator=' ', strip=True)
         
         # Normalize description
         description = self.normalize_text(description)
         
         # Extract SKU
-        sku = ""
-        if product_json and "variants" in product_json and len(product_json["variants"]) > 0:
-            sku = product_json["variants"][0].get("sku", "")
-        else:
-            # Try HTML selector
-            sku_el = page.locator(".variant-sku, variant-sku")
-            if sku_el.count() > 0:
-                sku_text = sku_el.first.inner_text().strip()
-                # Remove "SKU:" label if present
-                sku = sku_text.replace("SKU:", "").strip()
-        
-        if not sku:
-            sku = ""
+        if not product_json or "variants" not in product_json or len(product_json["variants"]) == 0:
+            raise Exception("Product JSON not found or missing variants")
+        sku = product_json["variants"][0].get("sku", "")
         
         # Extract images
         images = []
         seen_urls = set()
         
-        if product_json and "images" in product_json:
-            # Extract from JSON
-            for img_url in product_json["images"]:
-                clean_url = self.clean_image_url(img_url)
-                if clean_url and clean_url not in seen_urls:
-                    seen_urls.add(clean_url)
-                    images.append(clean_url)
-        
-        # Also try to get from HTML gallery
-        if not images:
-            try:
-                image_elements = page.locator(".product-gallery__media img, product-gallery__media img")
-                image_count = image_elements.count()
-                
-                for i in range(image_count):
-                    img = image_elements.nth(i)
-                    src = img.get_attribute("src")
-                    if not src:
-                        src = img.get_attribute("data-src")
-                    if src:
-                        clean_url = self.clean_image_url(src)
-                        if clean_url and clean_url not in seen_urls:
-                            seen_urls.add(clean_url)
-                            images.append(clean_url)
-            except Exception:
-                pass
+        if not product_json or "images" not in product_json:
+            raise Exception("Product JSON not found or missing images")
+        # Extract from JSON
+        for img_url in product_json["images"]:
+            clean_url = self.clean_image_url(img_url)
+            if clean_url and clean_url not in seen_urls:
+                seen_urls.add(clean_url)
+                images.append(clean_url)
         
         # Set primary image as the first image (if images exist)
         primary_image = images[0] if images else ""

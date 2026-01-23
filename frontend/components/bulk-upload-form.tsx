@@ -58,6 +58,7 @@ export default function BulkUploadForm() {
   const [validProducts, setValidProducts] = useState<MappedProduct[]>([])
   const [isRetryingAll, setIsRetryingAll] = useState(false)
   const [retryingIndices, setRetryingIndices] = useState<Set<number>>(new Set())
+  const [maxWorkers, setMaxWorkers] = useState<number>(10)
 
   // Auto-detect column mappings based on column names
   const autoDetectMappings = useCallback((columnNames: string[]) => {
@@ -636,7 +637,7 @@ export default function BulkUploadForm() {
     
     toast({
       title: "Starting bulk scrape",
-      description: `Processing all ${totalProducts} product(s) in parallel.`,
+      description: `Processing all ${totalProducts} product(s) with ${maxWorkers} parallel worker(s).`,
       variant: "default",
     })
 
@@ -661,6 +662,7 @@ export default function BulkUploadForm() {
         },
         body: JSON.stringify({
           products: filteredValidProducts, // All valid products are processed
+          maxWorkers: maxWorkers,
         }),
       })
 
@@ -741,6 +743,7 @@ export default function BulkUploadForm() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             products: [result.originalData],
+            maxWorkers: maxWorkers,
           }),
         })
         if (!bulkRes.ok) {
@@ -816,6 +819,7 @@ export default function BulkUploadForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           products: errorProducts, // All error products are retried
+          maxWorkers: maxWorkers,
         }),
       })
       if (!bulkRes.ok) {
@@ -928,19 +932,42 @@ export default function BulkUploadForm() {
           <CardHeader>
             <CardTitle>Processing Configuration</CardTitle>
             <CardDescription>
-              Products are scraped in parallel for faster processing
+              Configure how many products are processed in parallel
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {excelData.length > 0 && (
-              <div className="mt-4 p-4 bg-muted rounded-md">
-                <p className="text-sm">
-                  Estimated time: ~
-                  {Math.ceil(excelData.length * 3)}{" "}
-                  seconds (approximate, ~3 seconds per product)
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="max-workers">Parallel Workers</Label>
+                <Input
+                  id="max-workers"
+                  type="number"
+                  min="1"
+                  max="50"
+                  value={maxWorkers}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value, 10)
+                    if (!isNaN(value) && value >= 1 && value <= 50) {
+                      setMaxWorkers(value)
+                    }
+                  }}
+                  disabled={isScraping}
+                  className="w-full max-w-xs"
+                />
+                <p className="text-sm text-muted-foreground">
+                  Number of products processed simultaneously (1-50). Default: 10. Higher values may be faster but use more resources.
                 </p>
               </div>
-            )}
+              {excelData.length > 0 && (
+                <div className="mt-4 p-4 bg-muted rounded-md">
+                  <p className="text-sm">
+                    Estimated time: ~
+                    {Math.ceil((excelData.length / maxWorkers) * 3)}{" "}
+                    seconds (approximate, ~3 seconds per product, {maxWorkers} parallel workers)
+                  </p>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}

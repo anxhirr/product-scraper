@@ -16,13 +16,12 @@ SCRAPER_REGISTRY = {
     "donebydeer": DoneByDeerScraper,
 }
 
-# Brand to sites mapping (ordered list: primary, fallback, etc.)
+# Brand to sites mapping (ordered list: primary, etc.)
 BRAND_TO_SITES_MAP = {
     "hape": ["hape", "hape_global"],
     "liewood": ["liewood"],
     "rockahula": ["rockahula"],
     "done_by_deer": ["donebydeer"],
-    "done by deer": ["donebydeer"],  # Alias with spaces for user-friendly access
 }
 
 
@@ -58,10 +57,10 @@ def get_available_sites() -> list[str]:
 def get_sites_for_brand(brand: str) -> list[str]:
     """
     Returns an ordered list of site identifiers for a given brand.
-    The list is ordered by priority (primary, fallback, etc.).
+    The list is ordered by priority.
     
     Args:
-        brand: Brand identifier (e.g., "hape", "liewood", "Done by Deer")
+        brand: Brand identifier (e.g., "hape", "liewood", "done_by_deer")
     
     Returns:
         Ordered list of site identifiers for the brand
@@ -70,19 +69,12 @@ def get_sites_for_brand(brand: str) -> list[str]:
         ValueError: If the brand identifier is not found in the mapping
     """
     brand_lower = brand.lower().strip()
-    # Normalize spaces to underscores for brand matching
-    # e.g., "done by deer" -> "done_by_deer"
-    brand_normalized = brand_lower.replace(" ", "_")
     
-    # Try exact match first
+    # Try exact match
     if brand_lower in BRAND_TO_SITES_MAP:
         return BRAND_TO_SITES_MAP[brand_lower]
     
-    # Try normalized version (spaces to underscores)
-    if brand_normalized in BRAND_TO_SITES_MAP:
-        return BRAND_TO_SITES_MAP[brand_normalized]
-    
-    # If still not found, show available brands
+    # If not found, show available brands
     available_brands = ", ".join(BRAND_TO_SITES_MAP.keys())
     raise ValueError(
         f"Unknown brand: '{brand}'. Available brands: {available_brands}"

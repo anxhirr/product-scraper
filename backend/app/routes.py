@@ -48,7 +48,6 @@ def list_brands():
 class BatchSearchRequest(BaseModel):
     name: Optional[str] = None
     code: Optional[str] = None
-    site: Optional[str] = None  # Made optional, brand takes priority
     brand: Optional[str] = None
     category: Optional[str] = None
     barcode: Optional[str] = None
@@ -58,7 +57,6 @@ class BatchSearchRequest(BaseModel):
 
 class BatchSearchRequestBody(BaseModel):
     products: List[BatchSearchRequest]  # All products are processed (no limit)
-    batch_size: Optional[int] = None  # Deprecated, not used
     max_workers: Optional[int] = 10  # Number of parallel workers (default: 10)
 
 
@@ -75,14 +73,14 @@ class BatchSearchResponse(BaseModel):
 def scrape_single_product(request: BatchSearchRequest) -> BatchSearchResponse:
     """
     Helper function to scrape a single product.
-    Supports brand-based scraping with fallback to multiple sites.
+    Supports brand-based scraping with multiple sites.
     Preserves Excel values for category, barcode, price, and quantity.
     """
     # Determine which sites to try
     sites_to_try: list[str] = []
     
     if request.brand:
-        # Brand takes priority - get ordered list of sites for this brand
+        # Get ordered list of sites for this brand
         try:
             sites_to_try = get_sites_for_brand(request.brand)
         except ValueError as e:
@@ -94,12 +92,9 @@ def scrape_single_product(request: BatchSearchRequest) -> BatchSearchResponse:
                 price=request.price,
                 quantity=request.quantity,
             )
-    elif request.site:
-        # Fallback to direct site specification (backward compatibility)
-        sites_to_try = [request.site]
     else:
         return BatchSearchResponse(
-            error="Either brand or site must be provided",
+            error="Brand must be provided",
             status="error",
             category=request.category,
             barcode=request.barcode,
@@ -107,11 +102,10 @@ def scrape_single_product(request: BatchSearchRequest) -> BatchSearchResponse:
             quantity=request.quantity,
         )
     
-    # Determine query based on brand/site requirements
+    # Determine query based on brand requirements
     # Liewood only searches by name, not by code
     is_liewood = (
         (request.brand and request.brand.lower() == "liewood") or
-        (request.site and request.site.lower() == "liewood") or
         (sites_to_try and sites_to_try[0].lower() == "liewood")
     )
     
@@ -190,7 +184,7 @@ def scrape_single_product(request: BatchSearchRequest) -> BatchSearchResponse:
             continue
     
     # All sites failed
-    error_msg = last_error or f"All sites failed for brand/site: {request.brand or request.site}"
+    error_msg = last_error or f"All sites failed for brand: {request.brand}"
     return BatchSearchResponse(
         error=error_msg,
         status="error",
@@ -218,16 +212,13 @@ def batch_search(body: BatchSearchRequestBody):
 
     # Validate all requests
     for i, req in enumerate(products):
-        if not req.brand and not req.site:
+        if not req.brand:
             raise HTTPException(
                 status_code=400,
-                detail=f"Product {i + 1}: either brand or site must be provided",
+                detail=f"Product {i + 1}: brand must be provided",
             )
         # Check if this is liewood - requires name only
-        is_liewood = (
-            (req.brand and req.brand.lower() == "liewood") or
-            (req.site and req.site.lower() == "liewood")
-        )
+        is_liewood = req.brand and req.brand.lower() == "liewood"
         if is_liewood:
             if not req.name:
                 raise HTTPException(
@@ -365,16 +356,13 @@ def create_job(body: BatchSearchRequestBody):
     
     # Validate all requests
     for i, req in enumerate(products):
-        if not req.brand and not req.site:
+        if not req.brand:
             raise HTTPException(
                 status_code=400,
-                detail=f"Product {i + 1}: either brand or site must be provided",
+                detail=f"Product {i + 1}: brand must be provided",
             )
         # Check if this is liewood - requires name only
-        is_liewood = (
-            (req.brand and req.brand.lower() == "liewood") or
-            (req.site and req.site.lower() == "liewood")
-        )
+        is_liewood = req.brand and req.brand.lower() == "liewood"
         if is_liewood:
             if not req.name:
                 raise HTTPException(

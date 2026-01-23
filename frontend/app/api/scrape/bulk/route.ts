@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { translateToAlbanian } from "@/lib/translator"
+import { normalizeBrandName } from "@/lib/brand-normalizer"
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"
 
@@ -41,14 +41,11 @@ interface BackendBatchResponse {
 
 interface ProductData {
   name: string
-  nameOriginal?: string
   code: string
   price?: string
   brand?: string
   description?: string
-  descriptionOriginal?: string
   specifications?: Record<string, string>
-  specificationsOriginal?: Record<string, string>
   images?: string[]
   primaryImage?: string
   sourceUrl?: string
@@ -129,20 +126,8 @@ function parseSpecifications(specs: string): Record<string, string> {
       if (Object.keys(result).length > 0) {
         return result
       }
-      
-      // Fallback: try simple colon split for single key-value pair
-      const colonIndex = specs.indexOf(":")
-      if (colonIndex > 0) {
-        const key = specs.substring(0, colonIndex).trim()
-        const value = specs.substring(colonIndex + 1).trim()
-        if (key && value) {
-          result[key] = value
-          return result
-        }
-      }
     }
   }
-  // If all else fails, return empty object (specs will be shown as-is in specificationsOriginal)
   return {}
 }
 
@@ -159,56 +144,16 @@ async function mapProductToProductData(
   // Parse specifications first
   const parsedSpecs = parseSpecifications(backendProduct.specifications)
 
-  // Translate name, description and specification values in parallel
-  const translateName = backendProduct.title
-    ? translateToAlbanian(backendProduct.title)
-    : Promise.resolve(undefined)
-
-  const translateDescription = backendProduct.description
-    ? translateToAlbanian(backendProduct.description)
-    : Promise.resolve(undefined)
-
-  // Translate specification values in parallel (keep keys as-is)
-  const translatedSpecs: Record<string, string> = {}
-  let translateSpecs: Promise<void> = Promise.resolve()
-
-  if (parsedSpecs && Object.keys(parsedSpecs).length > 0) {
-    const specEntries = Object.entries(parsedSpecs)
-    const translationPromises = specEntries.map(async ([key, value]) => {
-      const translatedValue = value ? await translateToAlbanian(value) : value
-      return [key, translatedValue] as [string, string]
-    })
-    translateSpecs = Promise.all(translationPromises).then((translatedEntries) => {
-      translatedEntries.forEach(([key, value]) => {
-        translatedSpecs[key] = value
-      })
-    })
-  }
-
-  // Wait for name, description and specifications translations to complete
-  const [translatedName, translatedDescription] = await Promise.all([
-    translateName,
-    translateDescription,
-    translateSpecs,
-  ])
-
-  // Use translated specifications as-is (don't merge Excel barcode, category, quantity)
-  const finalSpecs: Record<string, string> = { ...translatedSpecs }
-
   // Use Excel price if provided, otherwise use scraped price
   const finalPrice = excelPrice || backendProduct.price
 
   return {
-    name: translatedName || backendProduct.title,
-    nameOriginal: backendProduct.title || undefined,
-    code: backendProduct.sku || code, // Fallback to provided code if sku is empty
+    name: backendProduct.title,
+    code: backendProduct.sku,
     price: finalPrice,
     brand: brand || undefined,
-    description: translatedDescription,
-    descriptionOriginal: backendProduct.description || undefined,
+    description: backendProduct.description || undefined,
     specifications:
-      Object.keys(finalSpecs).length > 0 ? finalSpecs : undefined,
-    specificationsOriginal:
       Object.keys(parsedSpecs).length > 0 ? parsedSpecs : undefined,
     images: backendProduct.images || [],
     primaryImage: backendProduct.primary_image || "",
@@ -239,7 +184,7 @@ export async function POST(request: NextRequest) {
         products: products.map((p) => ({
           name: p.name,
           code: p.code,
-          brand: p.brand,
+          brand: normalizeBrandName(p.brand),
           category: p.category,
           barcode: p.barcode,
           price: p.price,
