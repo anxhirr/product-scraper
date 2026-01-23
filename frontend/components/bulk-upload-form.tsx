@@ -50,9 +50,6 @@ export default function BulkUploadForm() {
     price?: string
     quantity?: string
   }>({})
-  const [batchSize, setBatchSize] = useState(200)
-  const [batchDelay, setBatchDelay] = useState(1000)
-  const [navigationDelay, setNavigationDelay] = useState(1000)
   const [isScraping, setIsScraping] = useState(false)
   const [scrapeProgress, setScrapeProgress] = useState(0)
   const [results, setResults] = useState<ScrapeResult[]>([])
@@ -578,8 +575,7 @@ export default function BulkUploadForm() {
       return
     }
 
-    // Note: batchSize is kept for backward compatibility but not used for parallelization
-    // Products are processed sequentially one-by-one
+    // Process all valid products from Excel file (no limit)
 
     setIsScraping(true)
     setScrapeProgress(0)
@@ -635,12 +631,12 @@ export default function BulkUploadForm() {
     // Store valid products for later use
     setValidProducts(filteredValidProducts)
 
-    // Process all products sequentially one-by-one
+    // Process all products in parallel (no limit)
     const totalProducts = filteredValidProducts.length
     
     toast({
       title: "Starting bulk scrape",
-      description: `Processing ${totalProducts} product(s) sequentially one-by-one.`,
+      description: `Processing all ${totalProducts} product(s) in parallel.`,
       variant: "default",
     })
 
@@ -664,10 +660,7 @@ export default function BulkUploadForm() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          products: filteredValidProducts,
-          batchSize: 1, // Not used for parallelization, kept for backward compatibility
-          batchDelay,
-          navigationDelay,
+          products: filteredValidProducts, // All valid products are processed
         }),
       })
 
@@ -748,9 +741,6 @@ export default function BulkUploadForm() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             products: [result.originalData],
-            batchSize: 1,
-            batchDelay: 0,
-            navigationDelay,
           }),
         })
         if (!bulkRes.ok) {
@@ -825,10 +815,7 @@ export default function BulkUploadForm() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          products: errorProducts,
-          batchSize: 1, // Not used for parallelization, kept for backward compatibility
-          batchDelay,
-          navigationDelay,
+          products: errorProducts, // All error products are retried
         }),
       })
       if (!bulkRes.ok) {
@@ -878,7 +865,7 @@ export default function BulkUploadForm() {
     } finally {
       setIsRetryingAll(false)
     }
-  }, [results, isScraping, isRetryingAll, batchSize, batchDelay, navigationDelay, pollJobUntilComplete, toast])
+  }, [results, isScraping, isRetryingAll, pollJobUntilComplete, toast])
 
   return (
     <div className="space-y-8">
@@ -941,50 +928,16 @@ export default function BulkUploadForm() {
           <CardHeader>
             <CardTitle>Processing Configuration</CardTitle>
             <CardDescription>
-              Configure how products are scraped sequentially (one-by-one)
+              Products are scraped in parallel for faster processing
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="product-delay">Delay Between Products (ms)</Label>
-                <Input
-                  id="product-delay"
-                  type="number"
-                  min="0"
-                  max="10000"
-                  step="100"
-                  value={batchDelay}
-                  onChange={(e) => setBatchDelay(parseInt(e.target.value) || 1000)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Delay between each product to avoid rate limiting (0-10000ms)
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="navigation-delay">Navigation Delay (ms)</Label>
-                <Input
-                  id="navigation-delay"
-                  type="number"
-                  min="0"
-                  max="10000"
-                  step="100"
-                  value={navigationDelay}
-                  onChange={(e) => setNavigationDelay(parseInt(e.target.value) || 0)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Delay between each page navigation to prevent overloading sites (0-10000ms)
-                </p>
-              </div>
-            </div>
             {excelData.length > 0 && (
               <div className="mt-4 p-4 bg-muted rounded-md">
                 <p className="text-sm">
                   Estimated time: ~
-                  {Math.ceil(
-                    excelData.length * ((batchDelay / 1000) + 3)
-                  )}{" "}
-                  seconds (approximate, ~3 seconds per product + delays)
+                  {Math.ceil(excelData.length * 3)}{" "}
+                  seconds (approximate, ~3 seconds per product)
                 </p>
               </div>
             )}

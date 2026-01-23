@@ -8,7 +8,7 @@ class DoneByDeerScraper(BaseScraper):
     """Scraper implementation for donebydeer.com"""
     
     def get_base_url(self) -> str:
-        return "https://donebydeer.com"
+        return "https://donebydeer.com/en-gb"
     
     def perform_search(self, page: Page, search_text: str, navigation_delay: float = 0) -> None:
         """Performs search on Done by Deer website using barcode."""
@@ -235,10 +235,10 @@ class DoneByDeerScraper(BaseScraper):
         if href.startswith("http"):
             product_url = href
         elif href.startswith("/"):
-            product_url = f"https://donebydeer.com{href}"
+            product_url = f"https://donebydeer.com/en-gb{href}"
         else:
             # If href is relative, construct from base URL
-            product_url = f"https://donebydeer.com/{href}"
+            product_url = f"https://donebydeer.com/en-gb/{href}"
         
         print(f"  ✓ Product URL: {product_url}")
         return product_url

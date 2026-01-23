@@ -208,7 +208,6 @@ export async function POST(request: NextRequest) {
           },
         ],
         batch_size: 1,
-        batch_delay: 0,
       }),
     })
 

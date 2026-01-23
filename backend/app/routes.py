@@ -4,6 +4,7 @@ from typing import List, Optional
 import time
 import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from scraper.registry import get_scraper, get_available_sites, get_sites_for_brand, get_available_brands
 from scraper.models import Product
 from app.job_store import job_store, JobStatus
@@ -56,10 +57,9 @@ class BatchSearchRequest(BaseModel):
 
 
 class BatchSearchRequestBody(BaseModel):
-    products: List[BatchSearchRequest]
-    batch_size: int = 200
-    batch_delay: int = 1000  # milliseconds
-    navigation_delay: int = 1000  # milliseconds
+    products: List[BatchSearchRequest]  # All products are processed (no limit)
+    batch_size: Optional[int] = None  # Deprecated, not used
+    max_workers: Optional[int] = 10  # Number of parallel workers (default: 10)
 
 
 class BatchSearchResponse(BaseModel):
@@ -72,7 +72,7 @@ class BatchSearchResponse(BaseModel):
     quantity: Optional[str] = None
 
 
-def scrape_single_product(request: BatchSearchRequest, navigation_delay: float = 0) -> BatchSearchResponse:
+def scrape_single_product(request: BatchSearchRequest) -> BatchSearchResponse:
     """
     Helper function to scrape a single product.
     Supports brand-based scraping with fallback to multiple sites.
@@ -144,7 +144,7 @@ def scrape_single_product(request: BatchSearchRequest, navigation_delay: float =
     for site in sites_to_try:
         try:
             scraper = get_scraper(site)
-            product = scraper.scrape_product(query, navigation_delay)
+            product = scraper.scrape_product(query, 0)
             
             # SKU validation for LieWood brand
             if is_liewood and request.code:
@@ -204,7 +204,7 @@ def scrape_single_product(request: BatchSearchRequest, navigation_delay: float =
 @router.post("/search/batch", response_model=List[BatchSearchResponse])
 def batch_search(body: BatchSearchRequestBody):
     """
-    Search for multiple products sequentially (one-by-one).
+    Search for multiple products in parallel.
     
     Args:
         body: Request body containing products list and configuration
@@ -242,26 +242,47 @@ def batch_search(body: BatchSearchRequestBody):
                 )
 
     # Use provided config or defaults
-    product_delay = body.batch_delay / 1000.0  # Convert to seconds (repurposed as delay between products)
-    navigation_delay = body.navigation_delay / 1000.0  # Convert to seconds
+    max_workers = body.max_workers if body.max_workers is not None else 10
 
-    results: List[BatchSearchResponse] = []
+    # Initialize results list with None values to maintain order
+    results: List[Optional[BatchSearchResponse]] = [None] * len(products)
 
-    # Process products sequentially one-by-one
-    for index, product in enumerate(products):
+    # Process products in parallel
+    def process_product(index: int, product: BatchSearchRequest) -> tuple[int, BatchSearchResponse]:
+        """Process a single product and return its index and result."""
         try:
-            result = scrape_single_product(product, navigation_delay)
-            results.append(result)
+            result = scrape_single_product(product)
+            return (index, result)
         except Exception as e:
-            results.append(BatchSearchResponse(
+            error_result = BatchSearchResponse(
                 error=f"Unexpected error: {str(e)}", status="error"
-            ))
-        
-        # Add delay between products (except after the last product)
-        if product_delay > 0 and index < len(products) - 1:
-            time.sleep(product_delay)
+            )
+            return (index, error_result)
 
-    return results
+    # Use ThreadPoolExecutor to process products in parallel
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        future_to_index = {
+            executor.submit(process_product, index, product): index
+            for index, product in enumerate(products)
+        }
+        
+        # Collect results as they complete
+        for future in as_completed(future_to_index):
+            index, result = future.result()
+            results[index] = result
+
+    # Convert None values to error responses (shouldn't happen, but safety check)
+    final_results: List[BatchSearchResponse] = []
+    for result in results:
+        if result is None:
+            final_results.append(BatchSearchResponse(
+                error="Processing failed", status="error"
+            ))
+        else:
+            final_results.append(result)
+
+    return final_results
 
 
 class JobResponse(BaseModel):
@@ -280,33 +301,45 @@ class JobStatusResponse(BaseModel):
 def process_job_async(job_id: str, body: BatchSearchRequestBody):
     """
     Process a scraping job asynchronously in a background thread.
-    Processes products sequentially one-by-one and updates job status incrementally.
+    Processes products in parallel and updates job status incrementally.
     """
     job = job_store.get_job(job_id)
     if not job:
         return
     
     products = body.products
-    product_delay = body.batch_delay / 1000.0  # Convert to seconds (repurposed as delay between products)
-    navigation_delay = body.navigation_delay / 1000.0  # Convert to seconds
+    max_workers = body.max_workers if body.max_workers is not None else 10
     
     job.update_status(JobStatus.IN_PROGRESS)
     
     try:
-        # Process products sequentially one-by-one
-        for index, product in enumerate(products):
+        def process_product(index: int, product: BatchSearchRequest):
+            """Process a single product and add result to job store."""
             try:
-                result = scrape_single_product(product, navigation_delay)
+                result = scrape_single_product(product)
                 job.add_result(index, result)
             except Exception as e:
                 error_result = BatchSearchResponse(
                     error=f"Unexpected error: {str(e)}", status="error"
                 )
                 job.add_result(index, error_result)
+        
+        # Use ThreadPoolExecutor to process products in parallel
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all tasks
+            futures = [
+                executor.submit(process_product, index, product)
+                for index, product in enumerate(products)
+            ]
             
-            # Add delay between products (except after the last product)
-            if product_delay > 0 and index < len(products) - 1:
-                time.sleep(product_delay)
+            # Wait for all tasks to complete
+            for future in as_completed(futures):
+                try:
+                    future.result()  # This will raise any exceptions that occurred
+                except Exception as e:
+                    # Individual task exceptions are already handled in process_product
+                    # This catch is for executor-level issues
+                    pass
         
         # Mark job as completed
         job.update_status(JobStatus.COMPLETED)
@@ -355,8 +388,7 @@ def create_job(body: BatchSearchRequestBody):
                     detail=f"Product {i + 1}: either name or code must be provided",
                 )
     
-    # Note: batch_size is kept for backward compatibility but not used for parallelization
-    # Products are now processed sequentially one-by-one
+    # All products are processed in parallel using max_workers (no limit on number of products)
     
     # Generate job ID
     job_id = str(uuid.uuid4())

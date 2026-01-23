@@ -15,9 +15,7 @@ interface BatchProductRequest {
 
 interface BatchRequest {
   products: BatchProductRequest[]
-  batchSize: number
-  batchDelay: number
-  navigationDelay?: number
+  maxWorkers?: number
 }
 
 interface BackendProduct {
@@ -221,7 +219,7 @@ async function mapProductToProductData(
 export async function POST(request: NextRequest) {
   try {
     const body: BatchRequest = await request.json()
-    const { products, batchSize, batchDelay, navigationDelay } = body
+    const { products, maxWorkers } = body
 
     if (!products || products.length === 0) {
       return NextResponse.json(
@@ -230,7 +228,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create async job on backend
+    // Create async job on backend - all products are processed (no limit)
     const backendUrl = `${BACKEND_URL}/jobs`
     const response = await fetch(backendUrl, {
       method: "POST",
@@ -247,9 +245,7 @@ export async function POST(request: NextRequest) {
           price: p.price,
           quantity: p.quantity,
         })),
-        batch_size: batchSize,
-        batch_delay: batchDelay,
-        navigation_delay: navigationDelay ?? 1000,
+        max_workers: maxWorkers,
       }),
     })
 
