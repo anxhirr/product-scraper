@@ -1,10 +1,10 @@
 from scraper.base_scraper import BaseScraper
 # from scraper.hape_scraper import HapeScraper
 from scraper.hape_global_scraper import HapeGlobalScraper
-from scraper.liewood_scraper import LiewoodScraper
 from scraper.rockahula_scraper import RockahulaScraper
 from scraper.donebydeer_scraper import DoneByDeerScraper
 from scraper.widdop_scraper import WiddopScraper
+from scraper.liewood_scraper import LiewoodScraper
 
 
 # Registry mapping site identifiers to scraper classes
@@ -12,19 +12,19 @@ SCRAPER_REGISTRY = {
     # "hape": HapeScraper,
     "hape": HapeGlobalScraper,
     "hape_global": HapeGlobalScraper,
-    "liewood": LiewoodScraper,
     "rockahula": RockahulaScraper,
     "donebydeer": DoneByDeerScraper,
     "widdop": WiddopScraper,
+    "liewood": LiewoodScraper,
 }
 
 # Brand to sites mapping (ordered list: primary, etc.)
 BRAND_TO_SITES_MAP = {
     "hape": ["hape", "hape_global"],
-    "liewood": ["liewood"],
     "rockahula": ["rockahula"],
     "done_by_deer": ["donebydeer"],
     "bambino": ["widdop"],
+    "liewood": ["liewood"],
 }
 
 
@@ -33,7 +33,7 @@ def get_scraper(site: str) -> BaseScraper:
     Factory function that returns an instance of the appropriate scraper for the given site.
     
     Args:
-        site: Site identifier (e.g., "hape", "hape_global", "liewood")
+        site: Site identifier (e.g., "hape", "hape_global", "rockahula")
     
     Returns:
         An instance of the appropriate scraper class
@@ -63,7 +63,7 @@ def get_sites_for_brand(brand: str) -> list[str]:
     The list is ordered by priority.
     
     Args:
-        brand: Brand identifier (e.g., "hape", "liewood", "done_by_deer")
+        brand: Brand identifier (e.g., "hape", "rockahula", "done_by_deer")
     
     Returns:
         Ordered list of site identifiers for the brand

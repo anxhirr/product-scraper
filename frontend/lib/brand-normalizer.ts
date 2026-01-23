@@ -21,14 +21,16 @@ export function normalizeBrandName(brand: string | undefined): string | undefine
     "hape": "hape",
     "hape global": "hape",
     "hape_global": "hape",
-    // Liewood variations
-    "liewood": "liewood",
     // Rockahula variations
     "rockahula": "rockahula",
     // Bambino variations
     "bambino": "bambino",
     "bambino by juliana": "bambino",
     "bambino-by-juliana": "bambino",
+    // LieWood variations
+    "liewood": "liewood",
+    "lie wood": "liewood",
+    "lie-wood": "liewood",
   }
   
   // Check exact match first

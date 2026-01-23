@@ -18,7 +18,7 @@ def search(site: str, query: str):
     Search for a product on the specified website.
     
     Args:
-        site: Website identifier (e.g., "hape", "liewood")
+        site: Website identifier (e.g., "hape", "rockahula")
         query: Search query text
     
     Returns:
@@ -103,35 +103,36 @@ def scrape_single_product(request: BatchSearchRequest) -> BatchSearchResponse:
         )
     
     # Determine query based on brand requirements
-    # Liewood only searches by name, not by code
-    is_liewood = (
-        (request.brand and request.brand.lower() == "liewood") or
-        (sites_to_try and sites_to_try[0].lower() == "liewood")
-    )
-    
     # Bambino/Widdop requires barcode for search
     is_bambino = (
         (request.brand and request.brand.lower() == "bambino") or
         (sites_to_try and sites_to_try[0].lower() == "widdop")
     )
     
-    if is_liewood:
-        query = request.name or ""
+    # LieWood searches by product name
+    is_liewood = (
+        (request.brand and request.brand.lower() == "liewood") or
+        (sites_to_try and sites_to_try[0].lower() == "liewood")
+    )
+    
+    if is_bambino:
+        # Bambino/Widdop requires barcode for search
+        query = request.barcode or ""
         if not query:
             return BatchSearchResponse(
-                error="Name must be provided for liewood brand",
+                error="Barcode must be provided for bambino brand",
                 status="error",
                 category=request.category,
                 barcode=request.barcode,
                 price=request.price,
                 quantity=request.quantity,
             )
-    elif is_bambino:
-        # Bambino/Widdop requires barcode for search
-        query = request.barcode or ""
+    elif is_liewood:
+        # LieWood searches by product name
+        query = request.name or ""
         if not query:
             return BatchSearchResponse(
-                error="Barcode must be provided for bambino brand",
+                error="Name must be provided for liewood brand",
                 status="error",
                 category=request.category,
                 barcode=request.barcode,
@@ -157,32 +158,6 @@ def scrape_single_product(request: BatchSearchRequest) -> BatchSearchResponse:
         try:
             scraper = get_scraper(site)
             product = scraper.scrape_product(query, 0)
-            
-            # SKU validation for LieWood brand
-            if is_liewood and request.code:
-                excel_sku = request.code.strip()
-                extracted_sku = product.sku.strip() if product.sku else ""
-                
-                if not excel_sku or not extracted_sku:
-                    return BatchSearchResponse(
-                        error=f"SKU validation failed: missing SKU data (Excel: '{excel_sku}', Extracted: '{extracted_sku}')",
-                        status="error",
-                        category=request.category,
-                        barcode=request.barcode,
-                        price=request.price,
-                        quantity=request.quantity,
-                    )
-                
-                # Case-insensitive check: extracted SKU should contain Excel SKU
-                if excel_sku.lower() not in extracted_sku.lower():
-                    return BatchSearchResponse(
-                        error=f"SKU validation failed: extracted SKU '{extracted_sku}' does not contain Excel SKU '{excel_sku}'",
-                        status="error",
-                        category=request.category,
-                        barcode=request.barcode,
-                        price=request.price,
-                        quantity=request.quantity,
-                    )
             
             return BatchSearchResponse(
                 product=product,
@@ -235,16 +210,7 @@ def batch_search(body: BatchSearchRequestBody):
                 status_code=400,
                 detail=f"Product {i + 1}: brand must be provided",
             )
-        # Check if this is liewood - requires name only
-        is_liewood = req.brand and req.brand.lower() == "liewood"
-        if is_liewood:
-            if not req.name:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Product {i + 1}: name must be provided for liewood brand",
-                )
-        else:
-            if not req.name and not req.code:
+        if not req.name and not req.code:
                 raise HTTPException(
                     status_code=400,
                     detail=f"Product {i + 1}: either name or code must be provided",
@@ -379,18 +345,10 @@ def create_job(body: BatchSearchRequestBody):
                 status_code=400,
                 detail=f"Product {i + 1}: brand must be provided",
             )
-        # Check if this is liewood - requires name only
-        is_liewood = req.brand and req.brand.lower() == "liewood"
         # Check if this is bambino - requires barcode
         is_bambino = req.brand and req.brand.lower() == "bambino"
         
-        if is_liewood:
-            if not req.name:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Product {i + 1}: name must be provided for liewood brand",
-                )
-        elif is_bambino:
+        if is_bambino:
             if not req.barcode:
                 raise HTTPException(
                     status_code=400,
