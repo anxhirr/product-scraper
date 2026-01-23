@@ -277,58 +277,10 @@ class LiewoodScraper(BaseScraper):
         print(f"  → Extracting product specifications...")
         specifications = ""
         
-        # Try to find additional accordion sections that might contain specs
-        # Look for accordions with content that might be specifications
-        all_accordions = page.locator("accordion-disclosure details").all()
-        spec_lines = []
-        
-        for idx, accordion in enumerate(all_accordions):
-            summary = accordion.locator("summary").first
-            if summary.count() > 0:
-                summary_text = summary.inner_text().strip().upper()
-                # Skip DESCRIPTION accordion (already extracted)
-                if "DESCRIPTION" in summary_text:
-                    continue
-                
-                # Check if accordion is open
-                is_open = accordion.get_attribute("open")
-                if not is_open:
-                    # Try to expand using JavaScript to avoid cookie overlay blocking
-                    # Use index-based selector to find the accordion
-                    try:
-                        page.evaluate(f"""
-                            (() => {{
-                                const accordions = document.querySelectorAll('accordion-disclosure details');
-                                const accordion = accordions[{idx}];
-                                if (accordion && !accordion.hasAttribute('open')) {{
-                                    accordion.setAttribute('open', '');
-                                    return true;
-                                }}
-                                return false;
-                            }})();
-                        """)
-                        page.wait_for_timeout(300)
-                    except Exception as e:
-                        # Fallback: try clicking (may fail if overlay is still blocking)
-                        try:
-                            summary.click(timeout=3000)
-                            page.wait_for_timeout(300)
-                        except:
-                            pass
-                
-                # Extract content
-                content = accordion.locator(".accordion__content").first
-                if content.count() > 0:
-                    content_text = content.inner_text().strip()
-                    if content_text:
-                        # Format as "Section Name: Content"
-                        spec_lines.append(f"{summary_text}: {self.normalize_text(content_text)}")
-        
-        if spec_lines:
-            specifications = "\n".join(spec_lines)
-            print(f"  ✓ Formatted {len(spec_lines)} specification section(s)")
-        else:
-            print(f"  ⚠ No specifications found")
+        # LieWood website does not have a separate specifications section
+        # All product information is in the description
+        # Return empty specifications to avoid extracting footer/legal text
+        print(f"  ✓ No specifications section available (information is in description)")
         
         # Extract images
         print(f"  → Extracting product images...")
