@@ -1015,6 +1015,7 @@ export default function BulkUploadForm() {
           onRetryAll={handleRetryAll}
           isRetryingAll={isRetryingAll}
           retryingIndices={retryingIndices}
+          originalColumns={columns}
         />
       )}
     </div>

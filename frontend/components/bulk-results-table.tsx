@@ -29,7 +29,9 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   RotateCwIcon,
+  FileSpreadsheetIcon,
 } from "lucide-react"
+import * as XLSX from "xlsx"
 import { Spinner } from "@/components/ui/spinner"
 import { useToast } from "@/hooks/use-toast"
 import type { ProductData } from "./product-scraper-form"
@@ -62,6 +64,7 @@ interface BulkResultsTableProps {
   onRetryAll?: () => void
   isRetryingAll?: boolean
   retryingIndices?: Set<number>
+  originalColumns?: string[]
 }
 
 export default function BulkResultsTable({
@@ -71,6 +74,7 @@ export default function BulkResultsTable({
   onRetryAll,
   isRetryingAll = false,
   retryingIndices = new Set(),
+  originalColumns = [],
 }: BulkResultsTableProps) {
   const { toast } = useToast()
   const [selectedResult, setSelectedResult] = useState<ScrapeResult | null>(null)
@@ -395,6 +399,82 @@ export default function BulkResultsTable({
     })
   }
 
+  const exportErroredToExcel = () => {
+    // Filter to only include errored results
+    const erroredResults = results.filter((r) => r.status === "error")
+
+    if (erroredResults.length === 0) {
+      toast({
+        title: "No errored items",
+        description: "There are no errored items to export",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Determine column order: use originalColumns if available, otherwise infer from first errored result
+    let columnOrder: string[] = []
+    if (originalColumns.length > 0) {
+      columnOrder = originalColumns
+    } else {
+      // Infer from first errored result's originalExcelRow
+      const firstErroredResult = erroredResults.find((r) => r.originalExcelRow)
+      if (firstErroredResult?.originalExcelRow) {
+        columnOrder = Object.keys(firstErroredResult.originalExcelRow)
+      } else {
+        toast({
+          title: "Export failed",
+          description: "Unable to determine column structure from errored items",
+          variant: "destructive",
+        })
+        return
+      }
+    }
+
+    // Prepare data rows maintaining column order
+    const dataRows = erroredResults.map((result) => {
+      const row: ExcelRow = {}
+      if (result.originalExcelRow) {
+        // Use originalExcelRow data, maintaining column order
+        columnOrder.forEach((col) => {
+          row[col] = result.originalExcelRow?.[col] ?? null
+        })
+      } else {
+        // If originalExcelRow is missing, create row with null values
+        columnOrder.forEach((col) => {
+          row[col] = null
+        })
+      }
+      return row
+    })
+
+    // Create workbook and worksheet
+    const worksheet = XLSX.utils.json_to_sheet(dataRows, {
+      header: columnOrder,
+      skipHeader: false,
+    })
+
+    // Create workbook
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Errored Items")
+
+    // Generate filename with timestamp
+    const now = new Date()
+    const timestamp = now
+      .toISOString()
+      .replace(/T/, "-")
+      .replace(/\..+/, "")
+      .replace(/:/g, "-")
+    const filename = `errored-items-${timestamp}.xlsx`
+
+    // Write file and trigger download
+    XLSX.writeFile(workbook, filename)
+
+    toast({
+      title: "Export successful",
+      description: `Exported ${erroredResults.length} errored item(s) to ${filename}`,
+    })
+  }
 
   return (
     <Card>
@@ -428,6 +508,17 @@ export default function BulkResultsTable({
                       Retry all errors
                     </>
                   )}
+                </Button>
+              )}
+              {errorCount > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={exportErroredToExcel}
+                  className="gap-2"
+                >
+                  <FileSpreadsheetIcon className="w-4 h-4" />
+                  Export Errors to Excel
                 </Button>
               )}
               <Button
