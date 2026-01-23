@@ -25,6 +25,10 @@ export function normalizeBrandName(brand: string | undefined): string | undefine
     "liewood": "liewood",
     // Rockahula variations
     "rockahula": "rockahula",
+    // Bambino variations
+    "bambino": "bambino",
+    "bambino by juliana": "bambino",
+    "bambino-by-juliana": "bambino",
   }
   
   // Check exact match first

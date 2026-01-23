@@ -4,6 +4,7 @@ from scraper.hape_global_scraper import HapeGlobalScraper
 from scraper.liewood_scraper import LiewoodScraper
 from scraper.rockahula_scraper import RockahulaScraper
 from scraper.donebydeer_scraper import DoneByDeerScraper
+from scraper.widdop_scraper import WiddopScraper
 
 
 # Registry mapping site identifiers to scraper classes
@@ -14,6 +15,7 @@ SCRAPER_REGISTRY = {
     "liewood": LiewoodScraper,
     "rockahula": RockahulaScraper,
     "donebydeer": DoneByDeerScraper,
+    "widdop": WiddopScraper,
 }
 
 # Brand to sites mapping (ordered list: primary, etc.)
@@ -22,6 +24,7 @@ BRAND_TO_SITES_MAP = {
     "liewood": ["liewood"],
     "rockahula": ["rockahula"],
     "done_by_deer": ["donebydeer"],
+    "bambino": ["widdop"],
 }
 
 

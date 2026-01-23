@@ -109,11 +109,29 @@ def scrape_single_product(request: BatchSearchRequest) -> BatchSearchResponse:
         (sites_to_try and sites_to_try[0].lower() == "liewood")
     )
     
+    # Bambino/Widdop requires barcode for search
+    is_bambino = (
+        (request.brand and request.brand.lower() == "bambino") or
+        (sites_to_try and sites_to_try[0].lower() == "widdop")
+    )
+    
     if is_liewood:
         query = request.name or ""
         if not query:
             return BatchSearchResponse(
                 error="Name must be provided for liewood brand",
+                status="error",
+                category=request.category,
+                barcode=request.barcode,
+                price=request.price,
+                quantity=request.quantity,
+            )
+    elif is_bambino:
+        # Bambino/Widdop requires barcode for search
+        query = request.barcode or ""
+        if not query:
+            return BatchSearchResponse(
+                error="Barcode must be provided for bambino brand",
                 status="error",
                 category=request.category,
                 barcode=request.barcode,
@@ -363,11 +381,20 @@ def create_job(body: BatchSearchRequestBody):
             )
         # Check if this is liewood - requires name only
         is_liewood = req.brand and req.brand.lower() == "liewood"
+        # Check if this is bambino - requires barcode
+        is_bambino = req.brand and req.brand.lower() == "bambino"
+        
         if is_liewood:
             if not req.name:
                 raise HTTPException(
                     status_code=400,
                     detail=f"Product {i + 1}: name must be provided for liewood brand",
+                )
+        elif is_bambino:
+            if not req.barcode:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Product {i + 1}: barcode must be provided for bambino brand",
                 )
         else:
             if not req.name and not req.code:
