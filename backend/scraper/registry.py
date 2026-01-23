@@ -5,6 +5,7 @@ from scraper.rockahula_scraper import RockahulaScraper
 from scraper.donebydeer_scraper import DoneByDeerScraper
 from scraper.widdop_scraper import WiddopScraper
 from scraper.liewood_scraper import LiewoodScraper
+from scraper.wookids_scraper import WookidsScraper
 
 
 # Registry mapping site identifiers to scraper classes
@@ -16,6 +17,7 @@ SCRAPER_REGISTRY = {
     "donebydeer": DoneByDeerScraper,
     "widdop": WiddopScraper,
     "liewood": LiewoodScraper,
+    "wookids": WookidsScraper,
 }
 
 # Brand to sites mapping (ordered list: primary, etc.)
@@ -25,6 +27,7 @@ BRAND_TO_SITES_MAP = {
     "done_by_deer": ["donebydeer"],
     "bambino": ["widdop"],
     "liewood": ["liewood"],
+    "woodkids": ["wookids"],
 }
 
 

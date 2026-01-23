@@ -31,6 +31,11 @@ export function normalizeBrandName(brand: string | undefined): string | undefine
     "liewood": "liewood",
     "lie wood": "liewood",
     "lie-wood": "liewood",
+    // WoodKids variations
+    "woodkids": "woodkids",
+    "wookids": "woodkids",
+    "wood kids": "woodkids",
+    "wood-kids": "woodkids",
   }
   
   // Check exact match first
