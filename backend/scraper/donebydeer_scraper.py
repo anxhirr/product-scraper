@@ -3,6 +3,7 @@ import time
 import re
 from scraper.base_scraper import BaseScraper
 from scraper.models import Product
+from scraper.services.cookie_consent_service import CookieConsentService
 
 
 class DoneByDeerScraper(BaseScraper):
@@ -20,30 +21,7 @@ class DoneByDeerScraper(BaseScraper):
         page.wait_for_timeout(1000)
         
         # Handle cookie consent overlay if present
-        print(f"  → Checking for cookie consent overlay...")
-        cookie_overlay = page.locator("#coiOverlay, .coiOverlay-container, #cookie-information-template-wrapper")
-        if cookie_overlay.count() > 0:
-            try:
-                # Wait for overlay to be visible
-                cookie_overlay.first.wait_for(state="visible", timeout=3000)
-                print(f"  → Cookie overlay detected, dismissing...")
-            except Exception as e:
-                print(f"  ⚠ Cookie overlay handling failed: {str(e)}")
-            finally:
-                # Force hide overlay programmatically (this is the only method that actually works)
-                try:
-                    page.evaluate("""
-                        document.querySelectorAll('#coiOverlay, .coiOverlay-container, #cookie-information-template-wrapper').forEach(el => {
-                            el.setAttribute('aria-hidden', 'true');
-                            el.style.display = 'none';
-                            el.style.pointerEvents = 'none';
-                            el.style.zIndex = '-1';
-                        });
-                    """)
-                    page.wait_for_timeout(500)
-                    print(f"  ✓ Hid cookie overlay programmatically")
-                except:
-                    pass
+        CookieConsentService.handle(page)
         
         print(f"  → Looking for search button...")
         
