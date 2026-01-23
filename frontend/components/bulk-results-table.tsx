@@ -179,8 +179,8 @@ export default function BulkResultsTable({
 
   // Helper function to get export data
   const getExportData = () => {
-    // Get all results (successful, error, and pending) for export
-    const allResults = results
+    // Filter to only include successful results for export
+    const allResults = results.filter((r) => r.status === "success")
 
     if (allResults.length === 0) {
       return null
@@ -331,7 +331,7 @@ export default function BulkResultsTable({
     if (!exportData) {
       toast({
         title: "No data to export",
-        description: "There are no results to export",
+        description: "There are no successful results to export",
         variant: "destructive",
       })
       return
@@ -391,7 +391,7 @@ export default function BulkResultsTable({
 
     toast({
       title: "Export successful",
-      description: `Exported ${exportData.count} product(s) (including original Excel data and scraped data) to ${filename}`,
+      description: `Exported ${exportData.count} successful product(s) (including original Excel data and scraped data) to ${filename}`,
     })
   }
 
